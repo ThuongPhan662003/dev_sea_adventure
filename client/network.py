@@ -1,4 +1,4 @@
-# client/network.py
+# -------------------- client/network.py --------------------
 import websockets
 import asyncio
 import json
@@ -13,10 +13,15 @@ class WebSocketClient:
         self.map_data = None
         self.on_update_players = None
         self.on_game_started = None
+        self.phase = "connect"
+        self.websocket = None
 
     async def connect(self, name):
         async with websockets.connect(self.uri) as websocket:
+            self.websocket = websocket
             await websocket.send(json.dumps({"type": "join", "name": name}))
+            self.phase = "waiting"
+
             while True:
                 message = await websocket.recv()
                 data = json.loads(message)
@@ -34,19 +39,23 @@ class WebSocketClient:
 
                 elif data["type"] == "start":
                     self.map_data = data["map"]
+                    self.token_holder = data["current_turn"]
+                    self.phase = "playing"
                     if self.on_game_started:
                         self.on_game_started()
+
 
     async def send_start_game(self):
         async with websockets.connect(self.uri) as websocket:
             await websocket.send(json.dumps({"type": "start_game"}))
+            print("Start game request sent.")
             response = await websocket.recv()
             data = json.loads(response)
             print("Game started:", data)
             if data["type"] == "start":
                 self.map_data = data["map"]  # Lưu map để vẽ sau
-                self.token_holder = data["token_holder"]
+                self.token_holder = data["current_turn"]
                 self.phase = "playing"
                 self.current_turn = data["current_turn"]
                 self.players = data["players"]
-                print("Game started with map data:", self.map_data)
+                

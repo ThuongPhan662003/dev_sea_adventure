@@ -49,7 +49,8 @@ async def websocket_endpoint(websocket: WebSocket):
                 )
                 await broadcast({"type": "waiting_room_update", "players": players})
 
-            elif message["type"] == "start_game" and websocket == clients[0]:
+            elif message["type"] == "start_game":
+                print(clients[0])
                 # Người đầu tiên là host -> bắt đầu game
                 map_data = generate_random_map()
                 await broadcast(
@@ -74,11 +75,19 @@ async def websocket_endpoint(websocket: WebSocket):
 
 
 def generate_random_map():
-    """Sinh bản đồ mẫu gồm source code ở random vị trí"""
-    positions = [(x, y) for x in range(5) for y in range(5)]
-    random.shuffle(positions)
-    sources = [{"id": i, "pos": pos} for i, pos in enumerate(positions[:5])]
-    return {"size": [5, 5], "sources": sources}
+    """Sinh bản đồ gồm 20 vị trí, trong đó một số là source code có score, còn lại là bug/ô trống"""
+    total_positions = 20
+    source_count = 6  # số lượng source code
+
+    source_codes = []
+    for pos in range(total_positions):
+
+        # Đây là ô Source Code
+        source_codes.append(
+            {"position": pos, "score": random.randint(1, 5), "collected": False}
+        )
+
+    return {"size": total_positions, "source_codes": source_codes}
 
 
 def advance_turn():

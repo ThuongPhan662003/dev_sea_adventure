@@ -1,4 +1,4 @@
-# client/client_app.py
+# -------------------- client/client_app.py --------------------
 import pygame
 import asyncio
 import threading
@@ -7,26 +7,32 @@ from scenes.waiting_room import draw_waiting_room
 from scenes.game_board import draw_game_board
 
 WIDTH, HEIGHT = 1000, 700
-screen = pygame.display.set_mode((WIDTH, HEIGHT))
+screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE)
 pygame.display.set_caption("Dev Sea Adventure")
 clock = pygame.time.Clock()
 
+websocket_client = WebSocketClient()
 phase = "connect"  # connect -> waiting -> playing
 player_name = ""
-is_host = False
-websocket_client = WebSocketClient()
+
+
+def on_players_update(players):
+    pass  # sẽ xử lý ở phần vẽ UI nếu cần hiển thị thêm thông tin
+
+
+def on_game_started():
+    global phase
+    phase = "playing"
 
 
 def run_websocket(name):
+    websocket_client.on_update_players = on_players_update
+    websocket_client.on_game_started = on_game_started
     asyncio.run(websocket_client.connect(name))
 
 
-def start_game_callback():
-    asyncio.run(websocket_client.send_start_game())
-
-
 def main():
-    global phase, player_name, is_host
+    global phase, player_name
     pygame.init()
     font = pygame.font.SysFont(None, 36)
     input_box = pygame.Rect(350, 300, 300, 40)
@@ -46,9 +52,10 @@ def main():
                         input_active = True
                     else:
                         input_active = False
-                elif phase == "waiting" and is_host:
+                elif phase == "waiting" and websocket_client.is_host:
                     if 800 <= event.pos[0] <= 900 and 600 <= event.pos[1] <= 650:
                         asyncio.run(websocket_client.send_start_game())
+
             elif event.type == pygame.KEYDOWN and input_active:
                 if event.key == pygame.K_RETURN:
                     player_name = input_text
@@ -62,7 +69,9 @@ def main():
                 else:
                     input_text += event.unicode
 
-        is_host = websocket_client.is_host
+        # Phase đồng bộ từ WebSocketClient
+        if websocket_client.phase != phase:
+            phase = websocket_client.phase
 
         if phase == "connect":
             txt_surface = font.render("Enter your name:", True, (0, 0, 0))
@@ -70,20 +79,17 @@ def main():
             pygame.draw.rect(screen, (0, 0, 0), input_box, 2)
             name_surface = font.render(input_text, True, (0, 0, 0))
             screen.blit(name_surface, (input_box.x + 5, input_box.y + 5))
+
         elif phase == "waiting":
-            if phase == "playing":
-                phase = "playing"
             draw_waiting_room(
                 screen,
                 websocket_client.players,
                 websocket_client.is_host,
-                start_game_callback,
+                lambda: asyncio.run(websocket_client.send_start_game()),
             )
 
         elif phase == "playing":
-            draw_game_board(
-                screen, websocket_client.map_data, websocket_client.current_turn
-            )
+            draw_game_board(screen, websocket_client)
 
         pygame.display.flip()
         clock.tick(30)
