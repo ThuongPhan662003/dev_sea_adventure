@@ -1,36 +1,52 @@
-import socket
-import threading
+# client/network.py
+import websockets
+import asyncio
 import json
-from state import GameState
 
 
-class GameClient:
-    def __init__(self, server_host, server_port):
-        self.server_host = server_host
-        self.server_port = server_port
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.state = GameState()
+class WebSocketClient:
+    def __init__(self):
+        self.uri = "ws://192.168.1.135:5000/ws"
+        self.players = []
+        self.is_host = False
+        self.token_holder = None
+        self.map_data = None
+        self.on_update_players = None
+        self.on_game_started = None
 
-    def connect(self, player_name):
-        self.sock.connect((self.server_host, self.server_port))
-        self.state.name = player_name
-        self.sock.sendall(player_name.encode())
-        threading.Thread(target=self.listen_to_server, daemon=True).start()
+    async def connect(self, name):
+        async with websockets.connect(self.uri) as websocket:
+            await websocket.send(json.dumps({"type": "join", "name": name}))
+            while True:
+                message = await websocket.recv()
+                data = json.loads(message)
 
-    def send_roll(self):
-        self.sock.sendall(b"roll")
+                if data["type"] == "join_accepted":
+                    self.players = data["players"]
+                    self.is_host = self.players[0] == name
+                    if self.on_update_players:
+                        self.on_update_players(self.players)
 
-    def listen_to_server(self):
-        while True:
-            try:
-                data = self.sock.recv(4096)
-                if not data:
-                    break
-                message = json.loads(data.decode())
-                if message["type"] == "state":
-                    self.state.players = message["players"]
-                    self.state.token_index = message["token_index"]
-                elif message["type"] == "error":
-                    print("[SERVER]:", message["message"])
-            except:
-                break
+                elif data["type"] == "waiting_room_update":
+                    self.players = data["players"]
+                    if self.on_update_players:
+                        self.on_update_players(self.players)
+
+                elif data["type"] == "start":
+                    self.map_data = data["map"]
+                    if self.on_game_started:
+                        self.on_game_started()
+
+    async def send_start_game(self):
+        async with websockets.connect(self.uri) as websocket:
+            await websocket.send(json.dumps({"type": "start_game"}))
+            response = await websocket.recv()
+            data = json.loads(response)
+            print("Game started:", data)
+            if data["type"] == "start":
+                self.map_data = data["map"]  # Lưu map để vẽ sau
+                self.token_holder = data["token_holder"]
+                self.phase = "playing"
+                self.current_turn = data["current_turn"]
+                self.players = data["players"]
+                print("Game started with map data:", self.map_data)

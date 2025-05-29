@@ -1,0 +1,8 @@
+fastapi
+sqlmodel
+uvicorn
+mysql-connector-python
+python-dotenv
+websockets
+pygame
+pymysql
