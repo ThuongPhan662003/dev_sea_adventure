@@ -1,9 +1,9 @@
 # server/main.py
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
-from .config import Config
-from .database import create_db_and_tables
-from .token_ring_server import router as token_ring_router
+from config import Config
+from database import create_db_and_tables
+from token_ring_server import router as token_ring_router
 
 app = FastAPI()
 

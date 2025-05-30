@@ -3,8 +3,8 @@
 
 from fastapi import WebSocket, WebSocketDisconnect
 from fastapi.routing import APIRouter
-from .database import get_session
-from .models import Player, Map, SourceCode
+from database import get_session
+from models import Player, Map, SourceCode
 import json, random
 
 router = APIRouter()
