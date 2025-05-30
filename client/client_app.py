@@ -5,10 +5,8 @@ import threading
 from network import WebSocketClient
 from scenes.waiting_room import draw_waiting_room
 from scenes.game_board import draw_game_board
+from scenes.setup import *
 
-WIDTH, HEIGHT = 1000, 700
-screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE)
-pygame.display.set_caption("Dev Sea Adventure")
 clock = pygame.time.Clock()
 
 websocket_client = WebSocketClient()
@@ -34,7 +32,6 @@ def run_websocket(name):
 def main():
     global phase, player_name
     pygame.init()
-    font = pygame.font.SysFont(None, 36)
     input_box = pygame.Rect(350, 300, 300, 40)
     input_active = False
     input_text = ""
@@ -89,7 +86,8 @@ def main():
             )
 
         elif phase == "playing":
-            draw_game_board(screen, websocket_client)
+            player_index = websocket_client.players.index(player_name)
+            draw_game_board(screen, websocket_client, player_index, event)
 
         pygame.display.flip()
         clock.tick(30)

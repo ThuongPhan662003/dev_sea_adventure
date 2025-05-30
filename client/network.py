@@ -6,7 +6,7 @@ import json
 
 class WebSocketClient:
     def __init__(self):
-        self.uri = "ws://192.168.1.135:5000/ws"
+        self.uri = "ws://192.168.1.27:5000/ws"
         self.players = []
         self.is_host = False
         self.token_holder = None
@@ -44,7 +44,6 @@ class WebSocketClient:
                     if self.on_game_started:
                         self.on_game_started()
 
-
     async def send_start_game(self):
         async with websockets.connect(self.uri) as websocket:
             await websocket.send(json.dumps({"type": "start_game"}))
@@ -58,4 +57,3 @@ class WebSocketClient:
                 self.phase = "playing"
                 self.current_turn = data["current_turn"]
                 self.players = data["players"]
-                

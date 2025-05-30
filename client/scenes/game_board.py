@@ -1,14 +1,20 @@
-import math
+# -------------------- client/scenes/game_board.py --------------------
 import pygame
+import math
 import random
 from tile import RockTile
 from character import Character
 from dice import Dice
+from .setup import *
 
+# Biến toàn cục để lưu đối tượng
 MAP_POSITIONS = []
+rock_tiles = []
+characters = []
+active_character = None
+dice = None
+button_rect = pygame.Rect(1000, 30, 150, 40)
 current_position_index = 0
-
-# Tạo bản đồ hình sin
 
 
 def create_sine_rock_map(
@@ -20,9 +26,7 @@ def create_sine_rock_map(
     MAP_POSITIONS = []
     for i in range(count):
         x = i * step
-        y = offset_y + int(
-            random.uniform(0.8, 1.2) * amplitude * math.sin(i * frequency)
-        )
+        y = offset_y + int(math.sin(i * frequency) * amplitude)
         MAP_POSITIONS.append((x, y))
         score = 5 + i
         img = tile_images[i % len(tile_images)]
@@ -31,39 +35,34 @@ def create_sine_rock_map(
     return tiles
 
 
-# Khởi tạo resources một lần để reuse
-initialized = False
-tile_images, tile_sounds, rock_tiles, characters, dice = [], [], [], [], None
-active_character = None
-font = None
-button_rect = pygame.Rect(1000, 30, 150, 40)
+def draw_game_board(screen, websocket_client, player_index, event=None):
+    global rock_tiles, characters, active_character, dice, current_position_index
 
+    if not rock_tiles:
+        tile_size = 50
+        tile_images = [
+            pygame.transform.scale(
+                pygame.image.load(f"output_tiles/tile_0_{i}.png").convert_alpha(),
+                (tile_size, tile_size),
+            )
+            for i in range(3)
+        ]
+        tile_sounds = [
+            pygame.mixer.Sound(f"output_tiles/music_{i}.wav") for i in range(3)
+        ]
 
-def init_game_board():
-    global initialized, tile_images, tile_sounds, rock_tiles, characters, dice, active_character, font
-    if initialized:
-        return
-    tile_size = 50
-    tile_images = [
-        pygame.transform.scale(
-            pygame.image.load(f"output_tiles/tile_0_{i}.png").convert_alpha(),
-            (tile_size, tile_size),
+        rock_tiles = create_sine_rock_map(
+            tile_images,
+            tile_sounds,
+            tile_size,
+            count=20,
+            amplitude=80,
+            frequency=0.5,
+            offset_y=screen.get_height() // 2,
+            gap=20,
         )
-        for i in range(3)
-    ]
-    tile_sounds = [pygame.mixer.Sound(f"output_tiles/music_{i}.wav") for i in range(3)]
-    rock_tiles = create_sine_rock_map(
-        tile_images,
-        tile_sounds,
-        tile_size,
-        count=20,
-        amplitude=80,
-        frequency=0.5,
-        offset_y=350,
-        gap=20,
-    )
-    characters.extend(
-        [
+
+        characters = [
             Character(
                 "Alice",
                 "assets/characters/bat",
@@ -86,17 +85,58 @@ def init_game_board():
                 2,
             ),
         ]
-    )
-    active_character = characters[1]
-    dice = Dice("dices", "dices/dice_sound.wav", (1000, 90))
-    font = pygame.font.SysFont("Arial", 20)
-    initialized = True
+        # active_character = characters[1]
+        active_character = characters[player_index % len(characters)]
 
+        dice = Dice("dices", "dices/dice_sound.wav", (1000, 90))
 
-def draw_game_board(screen, websocket_client):
-    global current_position_index
-    init_game_board()
-    dt = pygame.time.get_ticks() / 1000.0
+    dt = pygame.time.Clock().tick(60) / 1000
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            pygame.quit()
+            exit()
+        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if button_rect.collidepoint(event.pos):
+                step_count = dice.get_value()
+                end_index = min(current_position_index + step_count, len(MAP_POSITIONS))
+                steps = [
+                    (x, y - 50)
+                    for (x, y) in MAP_POSITIONS[current_position_index:end_index]
+                ]
+                active_character.set_steps(steps, delay=0.5)
+                current_position_index = end_index
+            elif dice.rect.collidepoint(event.pos):
+                dice.handle_click(event.pos)
+            for tile in rock_tiles:
+                tile.handle_click(event.pos)
+        else:
+            for tile in rock_tiles:
+                tile.handle_event(event)
+
+    keys = pygame.key.get_pressed()
+    if keys[pygame.K_LEFT]:
+        active_character.move("left", dt)
+    elif keys[pygame.K_RIGHT]:
+        active_character.move("right", dt)
+    elif keys[pygame.K_UP]:
+        active_character.move("up", dt)
+    elif keys[pygame.K_DOWN]:
+        active_character.move("down", dt)
+    else:
+        active_character.has_moved = False
+
+    if not dice.is_rolling and dice.final_value != 0:
+        step_count = dice.get_value()
+        end_index = min(current_position_index + step_count, len(MAP_POSITIONS))
+        steps = [
+            (x, y - 50) for (x, y) in MAP_POSITIONS[current_position_index:end_index]
+        ]
+        active_character.set_steps(steps, delay=0.5)
+        current_position_index = end_index
+        dice.final_value = 0
+
+    active_character.play_sound_if_moved()
+    dice.update(dt)
 
     screen.fill((135, 206, 235))
 
@@ -107,35 +147,8 @@ def draw_game_board(screen, websocket_client):
         char.update(dt)
         char.draw(screen, font)
 
-    # Draw button
     pygame.draw.rect(screen, (0, 128, 0), button_rect)
     button_label = font.render("Start Walk", True, (255, 255, 255))
     screen.blit(button_label, (button_rect.x + 20, button_rect.y + 10))
 
-    dice.update(dt)
     dice.draw(screen)
-
-    pygame.display.flip()
-
-
-def handle_game_event(event):
-    global current_position_index
-    if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-        if button_rect.collidepoint(event.pos):
-            step_count = dice.get_value()
-            end_index = min(current_position_index + step_count, len(MAP_POSITIONS))
-            steps = [
-                (x, y - 50)
-                for (x, y) in MAP_POSITIONS[current_position_index:end_index]
-            ]
-            characters[1].set_steps(steps, delay=0.5)
-            current_position_index = end_index
-        elif dice.rect.collidepoint(event.pos):
-            dice.handle_click(event.pos)
-            if not dice.is_rolling:
-                dice.final_value = dice.get_value()
-        for tile in rock_tiles:
-            tile.handle_click(event.pos)
-    else:
-        for tile in rock_tiles:
-            tile.handle_event(event)
