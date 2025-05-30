@@ -1,4 +1,7 @@
 # -------------------- client/scenes/game_board.py --------------------
+import asyncio
+import json
+
 import pygame
 import math
 import random
@@ -27,10 +30,15 @@ def create_sine_rock_map(
     for i in range(count):
         x = i * step
         y = offset_y + int(math.sin(i * frequency) * amplitude)
-        MAP_POSITIONS.append((x, y))
         score = 5 + i
+        collected = False
         img = tile_images[i % len(tile_images)]
         snd = tile_sounds[i % len(tile_sounds)]
+
+        # Lưu cả thông tin chi tiết vào MAP_POSITIONS
+        MAP_POSITIONS.append({"x": x, "y": y, "score": score, "collected": collected})
+
+        # Tạo đối tượng RockTile bình thường
         tiles.append(RockTile(img, x, y, tile_size, score, snd))
     return tiles
 
@@ -62,29 +70,29 @@ def draw_game_board(screen, websocket_client, player_index, event=None):
             gap=20,
         )
 
+        sprite_folders = [
+            "assets/characters/bat",
+            "assets/characters/blob",
+            "assets/characters/skeleton",
+        ]
+
+        sound_paths = [
+            "assets/sounds/impact.ogg",
+            "assets/sounds/music.wav",
+            "assets/sounds/shoot.wav",
+        ]
+
         characters = [
             Character(
-                "Alice",
-                "assets/characters/bat",
-                (150, 300),
-                "assets/sounds/impact.ogg",
-                0,
-            ),
-            Character(
-                "Bob",
-                "assets/characters/blob",
-                (150, 300),
-                "assets/sounds/music.wav",
-                1,
-            ),
-            Character(
-                "Jame",
-                "assets/characters/skeleton",
-                (150, 300),
-                "assets/sounds/shoot.wav",
-                2,
-            ),
+                name=websocket_client.players[i],
+                folder_path=sprite_folders[i % len(sprite_folders)],
+                position=(150 + i * 100, 300),
+                sound_path=sound_paths[i % len(sound_paths)],
+                channel_index=i,
+            )
+            for i in range(len(websocket_client.players))
         ]
+
         # active_character = characters[1]
         active_character = characters[player_index % len(characters)]
 
@@ -96,6 +104,11 @@ def draw_game_board(screen, websocket_client, player_index, event=None):
             pygame.quit()
             exit()
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            # ⚠️ Chỉ người đang giữ token mới được thao tác
+            # if websocket_client.player_name != websocket_client.current_turn:
+            #     print("⚠️ Not your turn")
+            #     return
+
             if button_rect.collidepoint(event.pos):
                 step_count = dice.get_value()
                 end_index = min(current_position_index + step_count, len(MAP_POSITIONS))
@@ -105,6 +118,26 @@ def draw_game_board(screen, websocket_client, player_index, event=None):
                 ]
                 active_character.set_steps(steps, delay=0.5)
                 current_position_index = end_index
+                # ✅ Gửi hành động và token sau khi bước xong
+                token_data = {
+                    "map_positions": [
+                        {
+                            "x": pos[0],
+                            "y": pos[1],
+                            "collected": rock_tiles[i].collected,
+                            "score": rock_tiles[i].score,
+                        }
+                        for i, pos in enumerate(MAP_POSITIONS)
+                    ]
+                }
+
+                action_data = {
+                    "player": websocket_client.player_name,
+                    "step_count": step_count,
+                    "end_index": end_index,
+                }
+                asyncio.run(websocket_client.send_action(token_data, action_data))
+                print("haha")
             elif dice.rect.collidepoint(event.pos):
                 dice.handle_click(event.pos)
             for tile in rock_tiles:
@@ -129,8 +162,10 @@ def draw_game_board(screen, websocket_client, player_index, event=None):
         step_count = dice.get_value()
         end_index = min(current_position_index + step_count, len(MAP_POSITIONS))
         steps = [
-            (x, y - 50) for (x, y) in MAP_POSITIONS[current_position_index:end_index]
+            (pos["x"], pos["y"] - 10)
+            for pos in MAP_POSITIONS[current_position_index:end_index]
         ]
+
         active_character.set_steps(steps, delay=0.5)
         current_position_index = end_index
         dice.final_value = 0

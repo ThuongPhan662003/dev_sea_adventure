@@ -5,9 +5,11 @@ import json
 
 
 class WebSocketClient:
+
     def __init__(self):
         self.uri = "ws://192.168.1.27:5000/ws"
         self.players = []
+        self.player_name = None  # 👈 Thêm dòng này
         self.is_host = False
         self.token_holder = None
         self.map_data = None
@@ -17,6 +19,7 @@ class WebSocketClient:
         self.websocket = None
 
     async def connect(self, name):
+        self.player_name = name  # 👈 Lưu tên người chơi hiện tại
         async with websockets.connect(self.uri) as websocket:
             self.websocket = websocket
             await websocket.send(json.dumps({"type": "join", "name": name}))
@@ -44,6 +47,9 @@ class WebSocketClient:
                     if self.on_game_started:
                         self.on_game_started()
 
+                elif data["type"] == "token":
+                    self.map_data = data["data"]  # bản đồ mới
+
     async def send_start_game(self):
         async with websockets.connect(self.uri) as websocket:
             await websocket.send(json.dumps({"type": "start_game"}))
@@ -57,3 +63,17 @@ class WebSocketClient:
                 self.phase = "playing"
                 self.current_turn = data["current_turn"]
                 self.players = data["players"]
+
+    async def send_action(self, token_data, action_data):
+        print("balaa")
+        print(f"Sending action: {action_data} with token data: {token_data}")
+        await self.websocket.send(
+            json.dumps(
+                {
+                    "type": "action",
+                    "sender": self.player_name,
+                    "token_data": token_data,
+                    "data": action_data,
+                }
+            )
+        )
