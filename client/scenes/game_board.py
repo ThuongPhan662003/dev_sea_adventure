@@ -1,3 +1,4 @@
+import math
 import pygame
 import random
 from tile import RockTile
@@ -20,7 +21,7 @@ def create_sine_rock_map(
     for i in range(count):
         x = i * step
         y = offset_y + int(
-            random.uniform(0.8, 1.2) * amplitude * pygame.math.sin(i * frequency)
+            random.uniform(0.8, 1.2) * amplitude * math.sin(i * frequency)
         )
         MAP_POSITIONS.append((x, y))
         score = 5 + i
