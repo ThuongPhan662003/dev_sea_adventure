@@ -50,13 +50,16 @@ def draw_game_board(screen, websocket_client, player_index, event=None):
         tile_size = 50
         tile_images = [
             pygame.transform.scale(
-                pygame.image.load(f"output_tiles/tile_0_{i}.png").convert_alpha(),
+                pygame.image.load(
+                    f"./assets/background/output_tiles/tile_0_{i}.png"
+                ).convert_alpha(),
                 (tile_size, tile_size),
             )
             for i in range(3)
         ]
         tile_sounds = [
-            pygame.mixer.Sound(f"output_tiles/music_{i}.wav") for i in range(3)
+            pygame.mixer.Sound(f"./assets/background/output_tiles/music_{i}.wav")
+            for i in range(3)
         ]
 
         rock_tiles = create_sine_rock_map(
@@ -71,15 +74,15 @@ def draw_game_board(screen, websocket_client, player_index, event=None):
         )
 
         sprite_folders = [
-            "assets/characters/bat",
-            "assets/characters/blob",
-            "assets/characters/skeleton",
+            "./assets/characters/bat",
+            "./assets/characters/blob",
+            "./assets/characters/skeleton",
         ]
 
         sound_paths = [
-            "assets/sounds/impact.ogg",
-            "assets/sounds/music.wav",
-            "assets/sounds/shoot.wav",
+            "./assets/character_sounds/impact.ogg",
+            "./assets/character_sounds/music.wav",
+            "./assets/character_sounds/shoot.wav",
         ]
 
         characters = [
@@ -96,7 +99,11 @@ def draw_game_board(screen, websocket_client, player_index, event=None):
         # active_character = characters[1]
         active_character = characters[player_index % len(characters)]
 
-        dice = Dice("dices", "dices/dice_sound.wav", (1000, 90))
+        dice = Dice(
+            "./assets/background/dices",
+            "./assets/background/dices/dice_sound.wav",
+            (1000, 90),
+        )
 
     dt = pygame.time.Clock().tick(60) / 1000
     for event in pygame.event.get():

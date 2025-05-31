@@ -7,7 +7,7 @@ import json
 class WebSocketClient:
 
     def __init__(self):
-        self.uri = "ws://192.168.1.27:5000/ws"
+        self.uri = "ws://192.168.68.160:5000/ws"
         self.players = []
         self.player_name = None  # 👈 Thêm dòng này
         self.is_host = False
