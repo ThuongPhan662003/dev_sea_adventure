@@ -1,4 +1,0 @@
-# Pygame cho client
-pygame==2.5.2
-# WebSocket & Socket.IO server
-python-socketio==5.11.2

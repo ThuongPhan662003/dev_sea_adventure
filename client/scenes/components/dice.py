@@ -12,6 +12,7 @@ class Dice:
             )
             for i in range(1, 7)
         ]
+        print(f"Loaded {len(self.images)} dice images from {image_folder}")
         self.sound = pygame.mixer.Sound(sound_path)
         self.position = position
         self.rect = pygame.Rect(position[0], position[1], 60, 60)

@@ -3,11 +3,14 @@ import websockets
 import asyncio
 import json
 
+from settings import PORT
+from utils.utils import get_local_ip
+
 
 class WebSocketClient:
 
     def __init__(self):
-        self.uri = "ws://192.168.1.72:5000/ws"
+        self.uri = f"ws://192.168.1.37:{PORT}/ws"
         self.players = []
         self.player_name = None  # 👈 Thêm dòng này
         self.is_host = False
@@ -16,10 +19,11 @@ class WebSocketClient:
         self.on_update_players = None
         self.on_game_started = None
         self.phase = "connect"
-        self.websocket = None
+        self.websocket = get_local_ip()
 
     async def connect(self, name):
         self.player_name = name  # 👈 Lưu tên người chơi hiện tại
+        print(f"Connecting to {self.uri} with name: {name}")
         async with websockets.connect(self.uri) as websocket:
             self.websocket = websocket
             await websocket.send(json.dumps({"type": "join", "name": name}))
