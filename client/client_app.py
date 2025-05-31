@@ -12,6 +12,7 @@ clock = pygame.time.Clock()
 websocket_client = WebSocketClient()
 phase = "connect"  # connect -> waiting -> playing
 player_name = ""
+count = 0
 
 
 def on_players_update(players):
@@ -87,6 +88,10 @@ def main():
 
         elif phase == "playing":
             player_index = websocket_client.players.index(player_name)
+            print("event", event)
+            global count
+            count += 1
+            print("count", count)
             draw_game_board(screen, websocket_client, player_index, event)
 
         pygame.display.flip()

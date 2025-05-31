@@ -37,6 +37,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
             if message["type"] == "join":
                 name = message["name"]
+                print(f"Player {name} joined the game")
                 if name not in players:
                     players.append(name)
                     player_ws_map[name] = websocket
@@ -68,6 +69,9 @@ async def websocket_endpoint(websocket: WebSocket):
                 advance_turn()
                 await broadcast(
                     {"type": "turn_update", "current_turn": players[current_turn_index]}
+                )
+                print(
+                    players[current_turn_index], " Turn advanced to ", message["data"]
                 )
 
     except WebSocketDisconnect:

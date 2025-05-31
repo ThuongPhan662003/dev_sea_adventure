@@ -77,11 +77,13 @@ def draw_game_board(screen, websocket_client, player_index, event=None):
             "./assets/characters/bat",
             "./assets/characters/blob",
             "./assets/characters/skeleton",
+            "./assets/characters/dev",
         ]
 
         sound_paths = [
             "./assets/character_sounds/impact.ogg",
             "./assets/character_sounds/music.wav",
+            "./assets/character_sounds/shoot.wav",
             "./assets/character_sounds/shoot.wav",
         ]
 

@@ -22,4 +22,4 @@ create_db_and_tables()
 app.include_router(token_ring_router)
 
 # Chạy bằng lệnh:
-# uvicorn server.main:app --host 0.0.0.0 --port 5000
+# uvicorn main:app --host 0.0.0.0 --port 5000
