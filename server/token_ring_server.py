@@ -177,14 +177,12 @@ async def handle_start_game(websocket: WebSocket):
 
 async def handle_action(name: str, data: dict, websocket: WebSocket):
     global players, player_ws_map, current_turn_index, map_data
-    if name != current_turn():
-        await send_to(
-            websocket, {"type": "error", "message": "Không phải lượt của bạn!"}
-        )
-        return
+    # if name != current_turn():
+    #     await send_to(
+    #         websocket, {"type": "error", "message": "Không phải lượt của bạn!"}
+    #     )
+    #     return
 
-    # Chuyển lượt
-    advance_turn()
     next_player = current_turn()
     next_player_id = player_ids.get(next_player)
     print("biết", name, data)
@@ -194,6 +192,7 @@ async def handle_action(name: str, data: dict, websocket: WebSocket):
         websocket,
         {
             "type": "turn_update",
+            "sender": name,
             # "map": map_data,
             # "player_positions": player_positions,
             # "updated_player": {"name": name, "new_position": current_player_position},
@@ -201,7 +200,9 @@ async def handle_action(name: str, data: dict, websocket: WebSocket):
             "current_turn_index": data,
         },
     )
-    await send_to(next_player_ws, {"type": "your_turn", "players": players})
+    # Chuyển lượt
+    advance_turn()
+    # await send_to(next_player_ws, {"type": "your_turn", "players": players})
 
 
 # ==== ENDPOINT WEBSOCKET ====
@@ -224,12 +225,12 @@ async def websocket_game(websocket: WebSocket):
             elif message["type"] == "start_game":
                 await handle_start_game(websocket)
             elif message["type"] == "action":
-
+                print(f"Player {message['sender']} is taking an action.")
                 await handle_action(
                     message["sender"], message["token_data"]["position"], websocket
                 )
             elif message["type"] == "role_dice":
-                print("Handling dice roll...")
+                print("Handling dice roll...", message)
                 # print(f"Player {message['type']} rolled dice: {message['total']}")
             # elif message["type"] == "your_turn":
             #     print(f"It's {message['player']}'s turn.")
