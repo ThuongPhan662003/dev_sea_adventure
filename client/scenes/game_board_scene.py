@@ -96,7 +96,7 @@ class GameBoardScene(BaseScene):
         self.active_character = self.characters[
             self.player_index % len(self.characters)
         ]
-        print(f"Active character: {self.active_character.name}")
+
         self.dice = Dice(
             "./assets/background/dices",
             "./assets/background/dices/dice_sound.wav",
@@ -105,36 +105,8 @@ class GameBoardScene(BaseScene):
 
     def handle_event(self, event):
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            if self.button_rect.collidepoint(event.pos):
-                step_count = self.dice.get_value()
-                end_index = min(self.current_position_index + step_count, LEN_MAP)
-                steps = [
-                    (x, y - 50)
-                    for (x, y) in MAP_POSITIONS[self.current_position_index : end_index]
-                ]
-                self.active_character.set_steps(steps, delay=0.5)
-                self.current_position_index = end_index
 
-                token_data = {
-                    "map_positions": [
-                        {
-                            "x": pos[0],
-                            "y": pos[1],
-                            "collected": self.rock_tiles[i].collected,
-                            "score": self.rock_tiles[i].score,
-                        }
-                        for i, pos in enumerate(MAP_POSITIONS)
-                    ]
-                }
-
-                action_data = {
-                    "player": self.client.player_name,
-                    "step_count": step_count,
-                    "end_index": end_index,
-                }
-                asyncio.run(self.client.send_action(token_data, action_data))
-
-            elif self.dice.rect.collidepoint(event.pos):
+            if self.dice.rect.collidepoint(event.pos):
                 self.dice.handle_click(event.pos)
 
             for tile in self.rock_tiles:
@@ -145,6 +117,48 @@ class GameBoardScene(BaseScene):
                 tile.handle_event(event)
 
     def update(self):
+        # Check queue for external actions (from server)
+        message = self.client.get_message_nowait()
+        while message:
+            if message["type"] == "external_action":
+                sender = message["sender"]
+                action_data = message["data"]
+                token_data = message["token_data"]
+
+                step_count = action_data["steps"]
+                target_character = next(
+                    (c for c in self.characters if c.name == sender), None
+                )
+
+                if target_character:
+                    start_index = 0
+                    for i, pos in enumerate(MAP_POSITIONS):
+                        if (pos["x"], pos["y"] - 50) == target_character.get_position():
+                            start_index = i
+                            break
+
+                    end_index = min(start_index + step_count, len(MAP_POSITIONS))
+                    steps = [
+                        (pos["x"], pos["y"] - 50)
+                        for pos in MAP_POSITIONS[start_index:end_index]
+                    ]
+                    target_character.set_steps(steps, delay=0.5)
+                    print(f"[Client] {sender} moved {step_count} steps")
+            elif message["type"] == "your_turn":
+                # Nếu là lượt của người chơi này, có thể thực hiện hành động
+                if message["player"] == self.client.player_name:
+                    print(f"[Client] It's your turn, {self.client.player_name}!")
+                    self.active_character = next(
+                        (
+                            c
+                            for c in self.characters
+                            if c.name == self.client.player_name
+                        ),
+                        None,
+                    )
+                    self.dice.is_rolling = False
+            message = self.client.get_message_nowait()
+
         dt = pygame.time.Clock().tick(60) / 1000
 
         keys = pygame.key.get_pressed()
@@ -158,21 +172,45 @@ class GameBoardScene(BaseScene):
             self.active_character.move("down", dt)
         else:
             self.active_character.has_moved = False
-
+        self.dice.update(dt)
         if not self.dice.is_rolling and self.dice.final_value != 0:
             step_count = self.dice.get_value()
-            end_index = min(self.current_position_index + step_count, LEN_MAP)
+            print(f"Dice rolled: {step_count}")
+
+            # self.client.send_dice(step_count)
+            end_index = min(
+                self.current_position_index + step_count, len(MAP_POSITIONS)
+            )
             steps = [
                 (pos["x"], pos["y"] - 50)
                 for pos in MAP_POSITIONS[self.current_position_index : end_index]
             ]
-
             self.active_character.set_steps(steps, delay=0.5)
             self.current_position_index = end_index
-            self.dice.final_value = 0
+
+            # 👉 Gửi dữ liệu tới server
+            # if self.client:
+            #     import threading, asyncio
+
+            token_data = {
+                "position": self.current_position_index
+            }  # dữ liệu vị trí hoặc token tùy thiết kế server
+            action_data = {
+                "steps": step_count,
+                "player": self.active_character.name,
+            }
+            # threading.Thread(
+            #     target=lambda: asyncio.run(
+            #         self.client.send_action(token_data, action_data)
+            #     ),
+            #     daemon=True,
+            # ).start()
+            self.client.send_action(token_data, action_data)
+
+            self.dice.final_value = 0  # reset sau khi gửi
 
             self.active_character.play_sound_if_moved()
-            self.dice.update(dt)
+            # self.dice.update(dt)
 
         for char in self.characters:
             char.update(dt)

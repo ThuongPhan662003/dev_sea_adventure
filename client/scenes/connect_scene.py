@@ -44,9 +44,8 @@ class ConnectScene(BaseScene):
                 if name:
                     print(f"Connecting with name: {name}")
 
-                    threading.Thread(
-                        target=lambda: asyncio.run(self.client.connect(name))
-                    ).start()
+                    # Khởi động websocket trong luồng ngầm
+                    self.client.start(name)
                     self.manager.set_scene("waiting")
             elif event.key == pygame.K_BACKSPACE:
                 self.input_text = self.input_text[:-1]

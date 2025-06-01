@@ -1,1 +1,6 @@
 venv/
+server/__pycache__/
+client/__pycache__/
+client/utils/__pycache__/
+client/scenes/__pycache__
+client/scenes/components/__pycache__
