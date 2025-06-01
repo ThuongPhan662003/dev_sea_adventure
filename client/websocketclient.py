@@ -80,28 +80,31 @@ class WebSocketClient:
                         self.map_data = data["data"]
 
                     elif data["type"] == "turn_update":
-                        sender = data["sender"]
-                        token_data = data.get("token_data", {})
-                        action_data = data.get("data", {})
-                        # self.send({"type": "liuliu"})
-                        if sender != self.player_name:
-                            # Nếu là người chơi khác, đẩy vào queue để scene xử lý
+                        sender = data.get("sender")
+                        # token_data = data.get("token_data", {})
+                        # action_data = data.get("data", {})
+                        # # self.send({"type": "liuliu"})
+                        # if sender != self.player_name:
+                        #     # Nếu là người chơi khác, đẩy vào queue để scene xử lý
 
-                            self.message_queue.put(
-                                {
-                                    "type": "external_action",
-                                    "sender": sender,
-                                    "token_data": token_data,
-                                    "data": action_data,
-                                }
-                            )
+                        self.message_queue.put(
+                            {
+                                "type": "external_action",
+                                "sender": sender,
+                                # "token_data": token_data,
+                                # "data": action_data,
+                                "current_turn": data.get("current_turn"),
+                                "current_turn_index": data.get("current_turn_index", 0),
+                            }
+                        )
                     elif data["type"] == "your_turn":
                         # Nếu là lượt của người chơi này, có thể thực hiện hành động
-                        while True:
-                            print("[WebSocketClient] It's your turn!")
-                        self.message_queue.put(
-                            {"type": "your_turn", "player": data.get("players")}
-                        )
+
+                        print("[WebSocketClient] It's your turn!")
+                        # self.send_dice(1)  # Gửi giá trị dice mặc định là 0
+                        # self.message_queue.put(
+                        #     {"type": "your_turn", "player": data.get("players")}
+                        # )
 
         except websockets.exceptions.ConnectionClosed as e:
             print(
@@ -138,7 +141,9 @@ class WebSocketClient:
         self.send({"type": "start_game"})
 
     def send_dice(self, dice_value):
-        self.send({"type": "role_dice", "total": dice_value})
+        self.send(
+            {"type": "role_dice", "total": dice_value, "sender": self.player_name}
+        )
 
     # Optional: Gửi hành động game
     def send_action(self, token_data, action_data):
