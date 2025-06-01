@@ -18,12 +18,12 @@ player_ids: dict[str, int] = {}  # ánh xạ name -> player_id
 # ==== HÀM XỬ LÝ ====
 async def send_to_next_player_from_to(websocket_from: WebSocket, message: dict):
     global players, player_ws_map, clients
-    print("player_ws_map:", player_ws_map)
-    print("players:", players)
-    print("clients:", clients)
+    # print("player_ws_map:", player_ws_map)
+    # print("players:", players)
+    # print("clients:", clients)
     sender_name = None
     for name, ws in player_ws_map.items():
-        print(f"Checking player: {name}, WebSocket: {ws}")
+        # print(f"Checking player: {name}, WebSocket: {ws}")
         if ws == websocket_from:
             sender_name = name
             break
@@ -36,11 +36,13 @@ async def send_to_next_player_from_to(websocket_from: WebSocket, message: dict):
     next_index = (current_index + 1) % len(players)
     next_player = players[next_index]
     websocket_to = player_ws_map.get(next_player)
-    print("dữ liệu", message)
+    print("người nhận", next_player)
+
     if websocket_to:
         try:
             await websocket_to.send_text(json.dumps(message))
-        except:
+        except Exception as e:
+            print("danh sách người chơi", players)
             print(f"Lỗi khi gửi tới người kế tiếp: {next_player} - {e}")
             if websocket_to in clients:
                 clients.remove(websocket_to)
@@ -60,7 +62,7 @@ def get_player_name_by_ws(ws: WebSocket):
 
 async def broadcast_token_ring(websocket_from: WebSocket, message: dict):
     global players, player_ws_map, clients
-    print("bắt đầu gửi theo vòng", message)
+    print("->>>>bắt đầu gửi theo vòng", message)
 
     if not players or len(players) < 2:
         return
@@ -83,6 +85,12 @@ async def broadcast_token_ring(websocket_from: WebSocket, message: dict):
         next_index = (players.index(current_name) + 1) % len(players)
         current_name = players[next_index]
         current_ws = player_ws_map[current_name]
+        # Nếu người nhận bị loại trong quá trình gửi, dừng vòng luôn
+        print("người chơi và danh sách", current_name, players)
+        if current_name not in players:
+            print(f"[broadcast] {current_name} đã bị ngắt kết nối, dừng vòng.")
+            return
+    print("->>>>Kết thúc gửi theo vòng")
 
 
 async def send_to(ws: WebSocket, message: dict):
@@ -130,7 +138,7 @@ async def handle_join(name: str, websocket: WebSocket):
         with get_session() as session:
             session.add(Player(player_name=name))
             session.commit()
-    print(f"Player {name} joined. Current players: {players}")
+    # print(f"Player {name} joined. Current players: {players}")
     # Gửi phản hồi riêng cho client đã join
     await send_to(websocket, {"type": "join_accepted", "players": players})
 
@@ -180,6 +188,7 @@ async def handle_action(name: str, data: dict, websocket: WebSocket):
     next_player = current_turn()
     next_player_id = player_ids.get(next_player)
     print("biết", name, data)
+    next_player_ws = player_ws_map.get(next_player)
     # Gửi thông tin cập nhật theo Token Ring
     await broadcast_token_ring(
         websocket,
@@ -192,6 +201,7 @@ async def handle_action(name: str, data: dict, websocket: WebSocket):
             "current_turn_index": data,
         },
     )
+    await send_to(next_player_ws, {"type": "your_turn", "players": players})
 
 
 # ==== ENDPOINT WEBSOCKET ====
@@ -221,8 +231,12 @@ async def websocket_game(websocket: WebSocket):
             elif message["type"] == "role_dice":
                 print("Handling dice roll...")
                 # print(f"Player {message['type']} rolled dice: {message['total']}")
+            # elif message["type"] == "your_turn":
+            #     print(f"It's {message['player']}'s turn.")
+            #     # Xử lý lượt của người chơi
+
     except WebSocketDisconnect:
-        remove_client(websocket)
+        # remove_client(websocket)
         print("Client disconnected.")
         await broadcast_token_ring(
             websocket, {"type": "player_disconnected", "players": players}

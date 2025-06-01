@@ -144,7 +144,19 @@ class GameBoardScene(BaseScene):
                     ]
                     target_character.set_steps(steps, delay=0.5)
                     print(f"[Client] {sender} moved {step_count} steps")
-
+            elif message["type"] == "your_turn":
+                # Nếu là lượt của người chơi này, có thể thực hiện hành động
+                if message["player"] == self.client.player_name:
+                    print(f"[Client] It's your turn, {self.client.player_name}!")
+                    self.active_character = next(
+                        (
+                            c
+                            for c in self.characters
+                            if c.name == self.client.player_name
+                        ),
+                        None,
+                    )
+                    self.dice.is_rolling = False
             message = self.client.get_message_nowait()
 
         dt = pygame.time.Clock().tick(60) / 1000
@@ -165,7 +177,7 @@ class GameBoardScene(BaseScene):
             step_count = self.dice.get_value()
             print(f"Dice rolled: {step_count}")
 
-            self.client.send_dice(step_count)
+            # self.client.send_dice(step_count)
             end_index = min(
                 self.current_position_index + step_count, len(MAP_POSITIONS)
             )
@@ -177,23 +189,23 @@ class GameBoardScene(BaseScene):
             self.current_position_index = end_index
 
             # 👉 Gửi dữ liệu tới server
-            if self.client:
-                import threading, asyncio
+            # if self.client:
+            #     import threading, asyncio
 
-                token_data = {
-                    "position": self.current_position_index
-                }  # dữ liệu vị trí hoặc token tùy thiết kế server
-                action_data = {
-                    "steps": step_count,
-                    "player": self.active_character.name,
-                }
-                # threading.Thread(
-                #     target=lambda: asyncio.run(
-                #         self.client.send_action(token_data, action_data)
-                #     ),
-                #     daemon=True,
-                # ).start()
-                self.client.send_action(token_data, action_data)
+            token_data = {
+                "position": self.current_position_index
+            }  # dữ liệu vị trí hoặc token tùy thiết kế server
+            action_data = {
+                "steps": step_count,
+                "player": self.active_character.name,
+            }
+            # threading.Thread(
+            #     target=lambda: asyncio.run(
+            #         self.client.send_action(token_data, action_data)
+            #     ),
+            #     daemon=True,
+            # ).start()
+            self.client.send_action(token_data, action_data)
 
             self.dice.final_value = 0  # reset sau khi gửi
 

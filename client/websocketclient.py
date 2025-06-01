@@ -73,8 +73,8 @@ class WebSocketClient:
                         self.map_data = data["map"]
                         self.token_holder = data["current_turn"]
                         self.phase = "playing"
-                        if self.on_game_started:
-                            self.on_game_started()
+                        # if self.on_game_started:
+                        #     self.on_game_started()
 
                     elif data["type"] == "token":
                         self.map_data = data["data"]
@@ -95,6 +95,13 @@ class WebSocketClient:
                                     "data": action_data,
                                 }
                             )
+                    elif data["type"] == "your_turn":
+                        # Nếu là lượt của người chơi này, có thể thực hiện hành động
+                        while True:
+                            print("[WebSocketClient] It's your turn!")
+                        self.message_queue.put(
+                            {"type": "your_turn", "player": data.get("players")}
+                        )
 
         except websockets.exceptions.ConnectionClosed as e:
             print(
