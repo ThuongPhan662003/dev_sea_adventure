@@ -26,7 +26,7 @@ class WaitingRoomScene(BaseScene):
         print("WebSocket client:", self.client.websocket)
 
     def on_game_started(self):
-        self.manager.set_scene("playing")
+        self.manager.set_scene("main_scene")
 
     def handle_event(self, event):
         if event.type == pygame.MOUSEBUTTONDOWN and self.client.is_host:
@@ -39,7 +39,17 @@ class WaitingRoomScene(BaseScene):
                 self.manager.set_scene("main_scene")
 
     def update(self):
-        pass
+        # Kiểm tra xem có tin nhắn nào mới từ server không
+        message = self.client.get_message_nowait()
+        while message:
+            if message["type"] == "start":
+                print("[WaitingRoomScene] Game start message received.")
+                self.client.map_data = message["map"]
+                self.client.token_holder = message["current_turn"]
+                self.client.phase = "playing"
+                self.client.players = message["players"]
+                self.on_game_started()
+            message = self.client.get_message_nowait()
 
     def draw(self, screen):
         # Vẽ background trước

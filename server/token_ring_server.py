@@ -36,14 +36,18 @@ async def send_to_next_player_from_to(websocket_from: WebSocket, message: dict):
     next_index = (current_index + 1) % len(players)
     next_player = players[next_index]
     websocket_to = player_ws_map.get(next_player)
-
+    print("dữ liệu", message)
     if websocket_to:
         try:
             await websocket_to.send_text(json.dumps(message))
         except:
-            print(f"Lỗi khi gửi tới người kế tiếp: {next_player}")
+            print(f"Lỗi khi gửi tới người kế tiếp: {next_player} - {e}")
             if websocket_to in clients:
                 clients.remove(websocket_to)
+            if next_player in player_ws_map:
+                del player_ws_map[next_player]
+            if next_player in players:
+                players.remove(next_player)
 
 
 def get_player_name_by_ws(ws: WebSocket):
@@ -55,12 +59,12 @@ def get_player_name_by_ws(ws: WebSocket):
 
 
 async def broadcast_token_ring(websocket_from: WebSocket, message: dict):
-    global players, player_ws_map
+    global players, player_ws_map, clients
+    print("bắt đầu gửi theo vòng", message)
 
     if not players or len(players) < 2:
         return
-    print("Bắt đầu gửi theo vòng Token Ring...")
-    print("Danh sách người chơi:", players)
+
     sender_name = get_player_name_by_ws(websocket_from)
     if sender_name is None:
         print("Người gửi không xác định.")
@@ -70,8 +74,9 @@ async def broadcast_token_ring(websocket_from: WebSocket, message: dict):
     current_ws = websocket_from
 
     for _ in range(len(players)):
-        print(f"Đang gửi từ: {current_name}")
-
+        print(f"action-  Đang gửi từ: {current_name}")
+        print("bí mat", message)
+        # if message["current_turn"] != current_name:
         await send_to_next_player_from_to(current_ws, message)
 
         # Lấy người kế tiếp trong danh sách vòng
@@ -106,7 +111,7 @@ def remove_client(ws: WebSocket):
     global clients, players, player_ws_map
     if ws in clients:
         clients.remove(ws)
-    for name, sock in list(player_ws_map.items()):
+    for name, sock in player_ws_map.items():
         if sock == ws:
             players.remove(name)
             del player_ws_map[name]
@@ -170,28 +175,21 @@ async def handle_action(name: str, data: dict, websocket: WebSocket):
         )
         return
 
-    # Cập nhật vị trí mới nếu có
-    new_position = data.get("new_position")
-    # if new_position is not None:
-    #     player_positions[name] = new_position
-
-    # Lưu lại người vừa thực hiện (websocket hiện tại) để truyền theo vòng
-    # current_player_position = player_positions.get(name)
-
     # Chuyển lượt
     advance_turn()
     next_player = current_turn()
     next_player_id = player_ids.get(next_player)
-
+    print("biết", name, data)
     # Gửi thông tin cập nhật theo Token Ring
     await broadcast_token_ring(
         websocket,
         {
             "type": "turn_update",
-            "map": map_data,
+            # "map": map_data,
             # "player_positions": player_positions,
             # "updated_player": {"name": name, "new_position": current_player_position},
-            "next_player": {"name": next_player, "id": next_player_id},
+            "current_turn": name,
+            "current_turn_index": data,
         },
     )
 
@@ -215,12 +213,17 @@ async def websocket_game(websocket: WebSocket):
 
             elif message["type"] == "start_game":
                 await handle_start_game(websocket)
-
             elif message["type"] == "action":
-                await handle_action(message["name"], message["data"], websocket)
 
+                await handle_action(
+                    message["sender"], message["token_data"]["position"], websocket
+                )
+            elif message["type"] == "role_dice":
+                print("Handling dice roll...")
+                # print(f"Player {message['type']} rolled dice: {message['total']}")
     except WebSocketDisconnect:
         remove_client(websocket)
+        print("Client disconnected.")
         await broadcast_token_ring(
             websocket, {"type": "player_disconnected", "players": players}
         )
