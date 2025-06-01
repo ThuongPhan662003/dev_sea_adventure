@@ -5,5 +5,5 @@ load_dotenv()
 
 
 class Config:
-    MYSQL_URI = os.getenv("MYSQL_URI", "mysql+pymysql://root:thuong@localhost/devsea")
+    MYSQL_URI = os.getenv("MYSQL_URI", "")
     SOCKETIO_CORS_ALLOWED_ORIGINS = ["*"]
