@@ -1,39 +1,13 @@
 import math
 import pygame
-
+import random
 from settings import LEN_MAP, MAP_POSITIONS, TILE_SIZE
 from utils.utils import create_zigzag_rock_map
 from .base_scene import BaseScene
 from .components.character import Character
 from .components.dice import Dice
+from .components.button import Button
 import asyncio
-
-
-class Button:
-    def __init__(self, rect, text, font, bg_color=(0, 128, 0), text_color=(255, 255, 255), action=None):
-        self.rect = pygame.Rect(rect)
-        self.text = text
-        self.font = font
-        self.bg_color = bg_color
-        self.text_color = text_color
-        self.action = action
-        self._render_text()
-
-    def _render_text(self):
-        self.rendered_text = self.font.render(self.text, True, self.text_color)
-        self.text_pos = (
-            self.rect.centerx - self.rendered_text.get_width() // 2,
-            self.rect.centery - self.rendered_text.get_height() // 2,
-        )
-
-    def draw(self, screen):
-        pygame.draw.rect(screen, self.bg_color, self.rect, border_radius=10)
-        screen.blit(self.rendered_text, self.text_pos)
-
-    def handle_event(self, event):
-        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            if self.rect.collidepoint(event.pos) and self.action:
-                self.action()
 
 
 class GameBoardScene(BaseScene):
@@ -48,31 +22,45 @@ class GameBoardScene(BaseScene):
         self.screen_width = 1200
         self.screen_height = 800
 
-        # Load tile images & sounds (chỉ load 1 lần)
         tile_size = 50
+        base_image = pygame.image.load("./assets/background/output_tiles/balloon.png").convert_alpha()
+
+        # Danh sách scale với trọng số tương ứng (50%, 30%, 20%)
+        scales = [1.0] * 5 + [1.3] * 3 + [1.6] * 2
+
         self.tile_images = [
             pygame.transform.scale(
-                pygame.image.load(f"./assets/background/output_tiles/tile_0_{i}.png").convert_alpha(),
-                (tile_size, tile_size),
+                base_image,
+                (int(tile_size * scale), int(tile_size * scale))
             )
-            for i in range(3)
+            for scale in random.choices(scales, k=15)  # hoặc số tile bạn muốn
         ]
+
         self.tile_sounds = [
             pygame.mixer.Sound(f"./assets/background/output_tiles/music_{i}.wav") for i in range(3)
         ]
 
         # Load sprite folders và âm thanh character
         self.sprite_folders = [
-            "./assets/characters/bat",
-            "./assets/characters/blob",
-            "./assets/characters/skeleton",
-            "./assets/characters/dev",
+            # "./assets/characters/bat",
+            # "./assets/characters/blob",
+            # "./assets/characters/skeleton",
+            "./assets/characters/c1",
+            "./assets/characters/c2",
+            "./assets/characters/c3",
+            "./assets/characters/c4",
+            "./assets/characters/c5",
+            "./assets/characters/c6",
         ]
+
         self.sound_paths = [
             "./assets/character_sounds/impact.ogg",
             "./assets/character_sounds/music.wav",
             "./assets/character_sounds/shoot.wav",
             "./assets/character_sounds/shoot.wav",
+            "./assets/character_sounds/shoot.wav",
+            "./assets/character_sounds/shoot.wav",
+            
         ]
 
         # Dice assets
@@ -100,6 +88,9 @@ class GameBoardScene(BaseScene):
         self.start_countdown()
 
     def init_board(self):
+        self.move_status = "Go on"
+        self.go_on_enabled = True
+
         # Tạo nút ở góc dưới bên phải
         button_width = 180
         button_height = 50
@@ -109,7 +100,6 @@ class GameBoardScene(BaseScene):
         panel_y_start = self.screen_height - (button_height + padding) * 5 - 20
 
         button_texts = [
-            ("Go on", (0, 128, 0), self.start_walk_action),
             ("Go back", (128, 0, 0), self.go_back_action),
             ("Drop down", (0, 0, 128), self.drop_down_action),
         ]
@@ -135,8 +125,8 @@ class GameBoardScene(BaseScene):
             amplitude=100,
             frequency=0.4,
             base_y=500,
-            gap=15,
-            slope=25,
+            gap=20,
+            slope=20,
             left_margin=70,
         )
 
@@ -148,6 +138,7 @@ class GameBoardScene(BaseScene):
                 position=(150 + i * 100, 300),
                 sound_path=self.sound_paths[i % len(self.sound_paths)],
                 channel_index=i,
+                label_image_path="./assets/background/star.png" if self.client.players[i] == self.client.player_name else None,
             )
             for i in range(len(self.client.players))
         ]
@@ -159,7 +150,7 @@ class GameBoardScene(BaseScene):
         self.dice = Dice(
             self.dice_images_path,
             self.dice_sound_path,
-            (1000, 200),
+            (600, 600),
         )
 
         # Vị trí ban đầu mỗi người chơi
@@ -180,13 +171,17 @@ class GameBoardScene(BaseScene):
                 tile.handle_event(event)
 
     def start_walk_action(self):
+        if not self.go_on_enabled:
+            print("[Client] Go On bị khóa vì đang ở trạng thái Quay đầu")
+            return
         print("[Client] Start Walk button pressed")
-        if not self.dice.is_rolling:
-            self.dice.handle_click(self.dice.rect.center)
+        # if not self.dice.is_rolling:
+        #     self.dice.handle_click(self.dice.rect.center)
 
     def go_back_action(self):
         print("[Client] Go Back button pressed")
-        # TODO: Thêm logic khi bấm Go Back
+        self.move_status = "Go Back"
+        self.go_on_enabled = False
 
     def drop_down_action(self):
         print("[Client] Drop Down button pressed")
@@ -234,17 +229,17 @@ class GameBoardScene(BaseScene):
             message = self.client.get_message_nowait()
 
         # Di chuyển nhân vật bằng phím
-        keys = pygame.key.get_pressed()
-        if keys[pygame.K_LEFT]:
-            self.active_character.move("left", dt)
-        elif keys[pygame.K_RIGHT]:
-            self.active_character.move("right", dt)
-        elif keys[pygame.K_UP]:
-            self.active_character.move("up", dt)
-        elif keys[pygame.K_DOWN]:
-            self.active_character.move("down", dt)
-        else:
-            self.active_character.has_moved = False
+        # keys = pygame.key.get_pressed()
+        # if keys[pygame.K_LEFT]:
+        #     self.active_character.move("left", dt)
+        # elif keys[pygame.K_RIGHT]:
+        #     self.active_character.move("right", dt)
+        # elif keys[pygame.K_UP]:
+        #     self.active_character.move("up", dt)
+        # elif keys[pygame.K_DOWN]:
+        #     self.active_character.move("down", dt)
+        # else:
+        #     self.active_character.has_moved = False
 
         # Cập nhật xúc xắc
         self.dice.update(dt)
@@ -255,27 +250,51 @@ class GameBoardScene(BaseScene):
             print(f"Dice rolled: {step_count}")
 
             player_name = self.active_character.name
-            start_index = self.character_positions.get(player_name, 0)
-            end_index = min(start_index + step_count, len(MAP_POSITIONS))
+            start_index = self.character_positions.get(player_name, -1)
 
-            steps = [(pos["x"], pos["y"] - 50) for pos in MAP_POSITIONS[start_index:end_index]]
-            self.active_character.set_steps(steps, delay=0.5)
+            if self.move_status == "Go Back":
+                step_range = [
+                    i for i in range(start_index - 1, -1, -1)
+                    if start_index - i <= step_count
+                ]
+            else:
+                step_range = [
+                    i for i in range(start_index + 1, len(MAP_POSITIONS))
+                    if i - start_index <= step_count
+                ]
 
-            self.character_positions[player_name] = end_index
+            if step_range:
+                steps = [(MAP_POSITIONS[i]["x"], MAP_POSITIONS[i]["y"] - 50) for i in step_range]
+                self.active_character.set_steps(steps, delay=0.5)
 
-            token_data = {"position": end_index}
-            action_data = {"steps": step_count, "player": player_name}
-            self.client.send_action(token_data, action_data)
+                end_index = step_range[-1]
+                self.character_positions[player_name] = end_index
+
+                token_data = {"position": end_index}
+                action_data = {"steps": step_count, "player": player_name}
+                self.client.send_action(token_data, action_data)
+                self.active_character.play_sound_if_moved()
 
             self.dice.final_value = 0
+
             self.active_character.play_sound_if_moved()
+
+            self.start_countdown()
+
 
         # Update các nhân vật
         for char in self.characters:
             char.update(dt)
 
+        
+
+
     def draw(self, screen):
         screen.blit(self.background, (0, 0))
+        # Góc trái trên cùng - trạng thái di chuyển
+        move_text_surface = self.font.render(f"Status: {self.move_status}", True, (255, 255, 255))
+        screen.blit(move_text_surface, (20, 20))
+
 
         # Vẽ các tile đá
         for tile in self.rock_tiles:
@@ -293,11 +312,19 @@ class GameBoardScene(BaseScene):
             # Tạo hiệu ứng scale cho chữ "Your turn"
             time = pygame.time.get_ticks() / 500  # Thời gian theo ms chia nhỏ
             scale = 1 + 0.1 * math.sin(time * 2 * math.pi)  # Scale dao động 0.9 - 1.1
+            your_name = self.client.player_name
+            token = self.client.token_holder
+            if token == your_name:
+                your_turn_text = "Your's turn"
+                text_color = (0, 255, 0)  # Màu xanh lá cây cho lượt của bạn
+            else:
+                your_turn_text = f"{token}'s turn"
+                text_color = (255, 255, 0)  # Màu vàng cho lượt của người khác
 
-            your_turn_text = "Your turn"
             base_font_size = 48
             font_scaled = pygame.font.SysFont(None, int(base_font_size * scale))
-            your_turn_surface = font_scaled.render(your_turn_text, True, (255, 255, 255))
+            your_turn_surface = font_scaled.render(your_turn_text, True, text_color)
+
 
             x = (self.screen_width - your_turn_surface.get_width()) // 2
             y = 30  # Cách mép trên 30px
@@ -323,13 +350,12 @@ class GameBoardScene(BaseScene):
             screen.blit(text_surface, (self.screen_width - text_surface.get_width() - 20, 20))
         else:
             # Hết thời gian
+
             times_up_text = "Time's up!"
             times_up_surface = self.countdown_font.render(times_up_text, True, (255, 0, 0))
-            times_up_pos = (
-                (self.screen_width - times_up_surface.get_width()) // 2,
-                (self.screen_height - times_up_surface.get_height()) // 2,
-            )
-            screen.blit(times_up_surface, times_up_pos)
+            x = (self.screen_width - times_up_surface.get_width()) // 2
+            y = 30  # Cách mép trên 30px
+            screen.blit(times_up_surface, (x, y))
 
         # Vẽ panel UI (nền panel phía dưới bên phải)
         button_width = 180
@@ -342,7 +368,7 @@ class GameBoardScene(BaseScene):
             panel_x - 20,
             panel_y_start - 20,
             button_width + 40,
-            (button_height + padding) * 3 + 40,
+            (button_height + padding) * 2 + 40,
         )
         pygame.draw.rect(screen, (30, 30, 30), panel_rect, border_radius=15)
 

@@ -8,13 +8,13 @@ class Dice:
         self.images = [
             pygame.transform.scale(
                 pygame.image.load(f"{image_folder}/dice{i}.png").convert_alpha(),
-                (60, 60),
+                (70, 70),
             )
             for i in range(1, 7)
         ]
         self.sound = pygame.mixer.Sound(sound_path)
         self.position = position
-        self.rect = pygame.Rect(position[0], position[1], 60, 60)
+        self.rect = pygame.Rect(position[0], position[1], 100, 100)
         self.value = 1  # giá trị đang hiển thị (trong khi quay)
         self.final_value = 0  # kết quả cuối cùng sau khi quay
         self.is_rolling = False

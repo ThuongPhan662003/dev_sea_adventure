@@ -9,7 +9,7 @@ class BaseScene:
         self.HEIGHT = WINDOW_HEIGHT
 
         # Background mặc định (nếu cần)
-        self.raw_background = pygame.image.load("./assets/background/bg.png").convert()
+        self.raw_background = pygame.image.load("./assets/background/bg2.png").convert()
         self.background = pygame.transform.scale(
             self.raw_background, (self.WIDTH, self.HEIGHT)
         )
