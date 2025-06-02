@@ -118,14 +118,28 @@ def advance_turn():
 
 
 def remove_client(ws: WebSocket):
-    global clients, players, player_ws_map
+    global clients, players, player_ws_map, current_turn_index, map_data, player_ids
+
     if ws in clients:
         clients.remove(ws)
-    for name, sock in player_ws_map.items():
+
+    for name, sock in list(player_ws_map.items()):
         if sock == ws:
             players.remove(name)
             del player_ws_map[name]
+            if name in player_ids:
+                del player_ids[name]
             break
+
+    # ✅ Nếu không còn client nào → reset toàn bộ server state
+    if not clients:
+        print("⚠️ Không còn người chơi nào. Reset server state.")
+        players.clear()
+        player_ws_map.clear()
+        player_ids.clear()
+        current_turn_index = 0
+        map_data = {}
+
 
 
 async def handle_join(name: str, websocket: WebSocket):
@@ -251,9 +265,10 @@ async def websocket_game(websocket: WebSocket):
             elif message["type"] == "next_token":
                 await handle_next_token(websocket, message)
 
-    except WebSocketDisconnect as e:
-        print(f"[WebSocket] Client disconnected. Code: {e.code}, Reason: {e.reason}")
-        # remove_client(websocket)
-        # await broadcast_token_ring(
-        #     websocket, {"type": "player_disconnected", "players": players}
-        # )
+    except WebSocketDisconnect:
+        print("Client disconnected.")
+        remove_client(websocket)
+        await broadcast_token_ring(
+            websocket, {"type": "player_disconnected", "players": players}
+        )
+
