@@ -46,12 +46,14 @@ def create_zigzag_rock_map(
         x = i * step + left_margin  # Dịch sang phải
         y = base_y - i * slope + int(math.sin(i * frequency) * amplitude)
 
-        score = 5 + i
+        score = 0
         collected = False
         img = tile_images[i % len(tile_images)]
         snd = tile_sounds[i % len(tile_sounds)]
 
-        MAP_POSITIONS.append({"x": x, "y": y, "score": score, "collected": collected})
+        MAP_POSITIONS.append(
+            {"x": x, "y": y, "score": score, "is_collected": collected}
+        )
         tiles.append(RockTile(img, x, y, tile_size, score, snd))
 
     return tiles

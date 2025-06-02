@@ -1,4 +1,5 @@
 import socket
+import random
 
 
 def get_local_ip():
@@ -15,5 +16,25 @@ def get_local_ip():
     return ip
 
 
-client_ip = get_local_ip()
-print(f"[CLIENT] My IP: {client_ip}")
+def create_game_map(length=15):
+    """
+    Tạo bản đồ game với các ô có thuộc tính index, score, is_collected.
+
+    Parameters:
+        length (int): Số lượng ô trong map.
+
+    Returns:
+        List[Dict]: Danh sách ô trong map.
+    """
+    game_map = []
+    for index in range(length):
+        tile = {
+            "index": index,
+            "x": 0,
+            "y": 0,  # Vị trí có thể được tính toán sau
+            "score": random.choice([0, 5, 10, 20]),  # hoặc theo luật game
+            "is_collected": False,
+        }
+        game_map.append(tile)
+
+    return game_map

@@ -36,7 +36,7 @@ class WaitingRoomScene(BaseScene):
                 #     daemon=True,
                 # ).start()
                 self.client.send_start_game()
-                self.manager.set_scene("main_scene")
+                # self.manager.set_scene("main_scene")
 
     def update(self):
         # Kiểm tra xem có tin nhắn nào mới từ server không
@@ -45,12 +45,13 @@ class WaitingRoomScene(BaseScene):
             # while True:
             print(f"[WaitingRoomScene] Received message: {message}")
             if message["type"] == "start":
+                self.client.map_state = message.get("map")
+                self.client.token_holder = message.get("current_turn")
 
-                print("[WaitingRoomScene] Game start message received.")
-                self.client.map_data = message["map"]
-                self.client.token_holder = message["current_turn"]
                 self.client.phase = "playing"
                 self.client.players = message["players"]
+
+                self.client.current_turn_index = 0
                 self.on_game_started()
             message = self.client.get_message_nowait()
 
