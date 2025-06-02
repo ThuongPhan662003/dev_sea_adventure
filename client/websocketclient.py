@@ -11,7 +11,7 @@ from utils.utils import get_local_ip
 class WebSocketClient:
 
     def __init__(self):
-        self.uri = f"ws://192.168.1.37:5000/ws"
+        self.uri = f"ws://192.168.1.37:5001/ws"
         self.players = []
         self.player_name = None
         self.is_host = False
@@ -29,6 +29,9 @@ class WebSocketClient:
 
         self.message_queue = queue.Queue()  # Queue message nhận được từ server
         self.current_position_index = 0  # Vị trí hiện tại của người chơi trên bản đồ
+        self.map_state = []
+        self.player_states = {}
+        self.current_turn_index = 0
 
     def start(self, name):
         """Bắt đầu kết nối websocket trên luồng phụ"""
@@ -71,22 +74,42 @@ class WebSocketClient:
 
                     elif data["type"] == "start":
                         self.map_data = data["map"]
-                        self.token_holder = data["current_turn"]
+                        # self.token_holder = data["current_turn"]
+
                         self.phase = "playing"
-                        # if self.on_game_started:
-                        #     self.on_game_started()
+                        self.players = data["players"]
+                        self.current_turn_index = 0
+                        for player in self.players:
+                            if player not in self.player_states:
+                                self.player_states[player] = {
+                                    "position_index": 0,
+                                    "score": 0,
+                                }
+
+                        self.map_state = data["map"]
+                        self.message_queue.put(
+                            {
+                                "type": "start",
+                                "map": self.map_data,
+                                "players": self.players,
+                                "current_turn": data["current_turn"],
+                            }
+                        )
 
                     elif data["type"] == "token":
                         self.map_data = data["data"]
 
                     elif data["type"] == "turn_update":
                         sender = data.get("sender")
+                        new_index = data.get("current_turn_index", 0)
                         # token_data = data.get("token_data", {})
                         # action_data = data.get("data", {})
                         # # self.send({"type": "liuliu"})
                         # if sender != self.player_name:
                         #     # Nếu là người chơi khác, đẩy vào queue để scene xử lý
-
+                        # Cập nhật vị trí cho người chơi
+                        # if sender in self.player_states:
+                        #     self.player_states[sender]["position_index"] = new_index
                         self.message_queue.put(
                             {
                                 "type": "external_action",
@@ -97,15 +120,24 @@ class WebSocketClient:
                                 "current_turn_index": data.get("current_turn_index", 0),
                             }
                         )
-                    elif data["type"] == "your_turn":
+                    elif data["type"] == "next_token_oke":
                         # Nếu là lượt của người chơi này, có thể thực hiện hành động
-
-                        print("[WebSocketClient] It's your turn!")
                         # self.send_dice(1)  # Gửi giá trị dice mặc định là 0
-                        # self.message_queue.put(
-                        #     {"type": "your_turn", "player": data.get("players")}
-                        # )
+                        print("data", data)
+                        self.message_queue.put(
+                            {
+                                "type": "next_token_holder",
+                                "player": data.get("players"),
+                                "current_turn": data.get("current_turn"),
+                            }
+                        )
 
+                        self.token_holder = data.get("current_turn")
+                        print(
+                            "[WebSocketClient] Token holder updated:",
+                            self.token_holder,
+                        )
+                    print("[WebSocketClient] Nhận message:", data)
         except websockets.exceptions.ConnectionClosed as e:
             print(
                 f"[WebSocketClient] ❌ Kết nối bị đóng. Code: {e.code}, reason: {e.reason}"
@@ -153,5 +185,24 @@ class WebSocketClient:
                 "sender": self.player_name,
                 "token_data": token_data,
                 "data": action_data,
+            }
+        )
+
+    def get_player_position(self, name):
+        return self.player_states.get(name, {}).get("position_index")
+
+    def get_player_score(self, name):
+        return self.player_states.get(name, {}).get("score")
+
+    def get_map_tile(self, index):
+        return self.map_state[index] if 0 <= index < len(self.map_state) else None
+
+    def send_turn_update(self, current_turn):
+        """Gửi thông tin lượt chơi tiếp theo"""
+        self.send(
+            {
+                "type": "next_token",
+                "sender": self.player_name,
+                "current_turn": current_turn,
             }
         )

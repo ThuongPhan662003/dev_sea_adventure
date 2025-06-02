@@ -3,6 +3,8 @@ from database import get_session
 from models import Player
 import json
 
+from utils.utils import create_game_map
+
 router = APIRouter()
 
 # ==== TRẠNG THÁI GAME ====
@@ -154,8 +156,8 @@ async def handle_start_game(websocket: WebSocket):
         print("Không có người chơi để bắt đầu game.")
         return
 
-    # map_data = generate_random_map()  # nếu có bản đồ
-
+    map_data = create_game_map()  # nếu có bản đồ
+    print("Bản đồ game đã được tạo:", map_data)
     # Lấy WebSocket của người đầu tiên (host)
     host_name = players[0]
     host_ws = player_ws_map.get(host_name)
@@ -183,26 +185,40 @@ async def handle_action(name: str, data: dict, websocket: WebSocket):
     #     )
     #     return
 
-    next_player = current_turn()
-    next_player_id = player_ids.get(next_player)
-    print("biết", name, data)
-    next_player_ws = player_ws_map.get(next_player)
     # Gửi thông tin cập nhật theo Token Ring
     await broadcast_token_ring(
         websocket,
         {
             "type": "turn_update",
             "sender": name,
-            # "map": map_data,
-            # "player_positions": player_positions,
-            # "updated_player": {"name": name, "new_position": current_player_position},
             "current_turn": name,
             "current_turn_index": data,
         },
     )
-    # Chuyển lượt
+
+
+async def handle_next_token(websocket: WebSocket, message: dict):
+    global players, current_turn_index, player_ws_map
+
+    # Tính người kế tiếp
     advance_turn()
-    # await send_to(next_player_ws, {"type": "your_turn", "players": players})
+    next_player = current_turn()
+    next_ws = player_ws_map.get(next_player)
+
+    if not next_ws:
+        print(f"[handle_next_token] Không tìm thấy WebSocket cho {next_player}")
+        return
+
+    # Gửi thông tin cập nhật theo Token Ring
+    await broadcast_token_ring(
+        next_ws,
+        {
+            "type": "next_token_oke",
+            "current_turn": next_player,
+            "players": players,
+        },
+    )
+    print(f"[handle_next_token] Đã gửi thông tin đến {next_player}.")
 
 
 # ==== ENDPOINT WEBSOCKET ====
@@ -232,13 +248,12 @@ async def websocket_game(websocket: WebSocket):
             elif message["type"] == "role_dice":
                 print("Handling dice roll...", message)
                 # print(f"Player {message['type']} rolled dice: {message['total']}")
-            # elif message["type"] == "your_turn":
-            #     print(f"It's {message['player']}'s turn.")
-            #     # Xử lý lượt của người chơi
+            elif message["type"] == "next_token":
+                await handle_next_token(websocket, message)
 
-    except WebSocketDisconnect:
+    except WebSocketDisconnect as e:
+        print(f"[WebSocket] Client disconnected. Code: {e.code}, Reason: {e.reason}")
         # remove_client(websocket)
-        print("Client disconnected.")
-        await broadcast_token_ring(
-            websocket, {"type": "player_disconnected", "players": players}
-        )
+        # await broadcast_token_ring(
+        #     websocket, {"type": "player_disconnected", "players": players}
+        # )
