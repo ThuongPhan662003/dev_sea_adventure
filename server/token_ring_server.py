@@ -1,8 +1,10 @@
+from asyncio import create_task, sleep
+import asyncio
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from database import get_session
 from models import Player
 import json
-
+from datetime import datetime
 from utils.utils import create_game_map
 
 router = APIRouter()
@@ -15,6 +17,11 @@ current_turn_index: int = 0
 map_data: dict = {}
 current_game_id: int = 1  # giả sử bạn đã tạo game trong DB và lấy id
 player_ids: dict[str, int] = {}  # ánh xạ name -> player_id
+
+current_turn_name: str | None = None
+token_start_time: datetime | None = None
+current_turn_ws: WebSocket | None = None
+token_timeout_task = None  # Task đang đếm timeout cho token
 
 
 # ==== HÀM XỬ LÝ ====
@@ -92,6 +99,9 @@ async def broadcast_token_ring(websocket_from: WebSocket, message: dict):
         if current_name not in players:
             print(f"[broadcast] {current_name} đã bị ngắt kết nối, dừng vòng.")
             return
+    if len(clients) == 1:
+        await send_to_next_player_from_to(current_ws, message)
+        print(f"[broadcast] Chỉ còn {current_name} trong game, dừng vòng.")
     print("->>>>Kết thúc gửi theo vòng")
 
 
@@ -141,7 +151,6 @@ def remove_client(ws: WebSocket):
         map_data = {}
 
 
-
 async def handle_join(name: str, websocket: WebSocket):
     global players, player_ws_map, clients
     # Nếu người chơi chưa tồn tại, thêm vào danh sách
@@ -165,13 +174,17 @@ async def handle_join(name: str, websocket: WebSocket):
 
 
 async def handle_start_game(websocket: WebSocket):
-    global players, player_ws_map, current_turn_index, map_data
+    global current_turn_name, token_start_time, current_turn_ws, players, player_ws_map, current_turn_index, map_data
+    current_turn_name = players[0]  # hoặc host_name
+    token_start_time = datetime.utcnow()
+    current_turn_ws = player_ws_map.get(current_turn_name)
+    print(f"Khởi tạo game với người chơi: {current_turn_name}{current_turn_ws}")
     if not players:
         print("Không có người chơi để bắt đầu game.")
         return
 
     map_data = create_game_map()  # nếu có bản đồ
-    print("Bản đồ game đã được tạo:", map_data)
+    # print("Bản đồ game đã được tạo:", map_data)
     # Lấy WebSocket của người đầu tiên (host)
     host_name = players[0]
     host_ws = player_ws_map.get(host_name)
@@ -189,6 +202,8 @@ async def handle_start_game(websocket: WebSocket):
             "current_turn": current_turn(),
         },
     )
+    # ✅ Bắt đầu đếm ngược 5 giây cho người đầu tiên
+    await start_token_timeout(host_ws, host_name)
 
 
 async def handle_action(name: str, data: dict, websocket: WebSocket):
@@ -230,9 +245,41 @@ async def handle_next_token(websocket: WebSocket, message: dict):
             "type": "next_token_oke",
             "current_turn": next_player,
             "players": players,
+            "start_time": datetime.utcnow().isoformat(),
         },
     )
     print(f"[handle_next_token] Đã gửi thông tin đến {next_player}.")
+    global current_turn_name, token_start_time, current_turn_ws
+    current_turn_name = next_player
+    token_start_time = datetime.utcnow()
+    current_turn_ws = next_ws
+    await start_token_timeout(current_turn_ws, current_turn_name)
+
+
+def get_token_elapsed_seconds():
+    if token_start_time:
+        return int((datetime.utcnow() - token_start_time).total_seconds())
+    return 0
+
+
+async def start_token_timeout(ws: WebSocket, player_name: str):
+    global current_turn_name, token_start_time, current_turn_ws, token_timeout_task
+
+    current_turn_name = player_name
+    token_start_time = datetime.utcnow()
+    current_turn_ws = ws
+
+    # Hủy task cũ nếu đang chạy
+    if token_timeout_task and not token_timeout_task.done():
+        token_timeout_task.cancel()
+
+    # Tạo task mới đếm ngược 5 giây
+    async def timeout_handler():
+        await sleep(10)
+        print(f"[TIMEOUT] {player_name} đã giữ token quá 5s.")
+        await handle_next_token(ws, {"type": "auto_next_due_to_timeout"})
+
+    token_timeout_task = create_task(timeout_handler())
 
 
 # ==== ENDPOINT WEBSOCKET ====
@@ -244,8 +291,45 @@ async def websocket_game(websocket: WebSocket):
     clients.append(websocket)
 
     try:
+        print("Client connected:", websocket.client)
         while True:
+            # global current_turn_name, token_start_time, current_turn_ws
+            # print("Current players:", players)
+            # # === KIỂM TRA TOKEN CÓ HẾT GIỜ KHÔNG ===
+            # if current_turn_name and token_start_time:
+            #     print("giờ", datetime.utcnow(), token_start_time)
+            #     elapsed = (datetime.utcnow() - token_start_time).total_seconds()
+            #     print("time elapsed---------------:", elapsed)
+            #     if elapsed >= 5:
+            #         print(
+            #             f"[TIMEOUT] {current_turn_name} giữ token quá 15s. Chuyển lượt..."
+            #         )
+            #         if current_turn_ws:
+            #             await handle_next_token(
+            #                 current_turn_ws,
+            #                 {
+            #                     "type": "next_token",
+            #                     "sender": current_turn_name,
+            #                     "current_turn": current_turn_name,
+            #                 },
+            #             )
+            #             print(
+            #                 f"[TIMEOUT] Đã chuyển lượt từ {current_turn_name} sang {current_turn_ws}"
+            #             )
+
+            #         else:
+            #             print(
+            #                 f"[TIMEOUT] Không tìm thấy WebSocket cho {current_turn_name}. Không thể chuyển lượt."
+            #             )
+            #         # reset để tránh gọi nhiều lần
+            #         current_turn_name = None
+            #         token_start_time = None
+            #         current_turn_ws = None
+            # else:
+            #     print("Không có người chơi hiện tại hoặc token chưa được khởi tạo.")
+            # === NHẬN DỮ LIỆU TỪ CLIENT ===
             data = await websocket.receive_text()
+            # data = await asyncio.wait_for(websocket.receive_text(), timeout=1)
             message = json.loads(data)
             print(f"Received message: {message}")
             if message["type"] == "join":
@@ -264,11 +348,11 @@ async def websocket_game(websocket: WebSocket):
                 # print(f"Player {message['type']} rolled dice: {message['total']}")
             elif message["type"] == "next_token":
                 await handle_next_token(websocket, message)
-
+    except asyncio.TimeoutError:
+        pass
     except WebSocketDisconnect:
         print("Client disconnected.")
         remove_client(websocket)
         await broadcast_token_ring(
             websocket, {"type": "player_disconnected", "players": players}
         )
-

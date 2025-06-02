@@ -12,7 +12,7 @@ class WebSocketClient:
 
     def __init__(self):
 
-        self.uri = f"ws://192.168.1.37:5001/ws"
+        self.uri = f"ws://{get_local_ip()}/ws"
 
         self.players = []
         self.player_name = None
@@ -54,7 +54,9 @@ class WebSocketClient:
                     json.dumps({"type": "join", "name": self.player_name})
                 )
                 self.phase = "waiting"
-
+                print(
+                    f"[WebSocketClient] ✅ Đã kết nối tới {self.uri} với tên {self.player_name}"
+                )
                 while self.running:
                     message = await websocket.recv()
                     data = json.loads(message)
@@ -131,6 +133,7 @@ class WebSocketClient:
                                 "type": "next_token_holder",
                                 "player": data.get("players"),
                                 "current_turn": data.get("current_turn"),
+                                "start_time": data.get("start_time"),
                             }
                         )
 

@@ -1,3 +1,4 @@
+from datetime import datetime
 import math
 import pygame
 import random
@@ -77,7 +78,7 @@ class GameBoardScene(BaseScene):
         self.buttons = []
 
         # Đồng hồ đếm ngược
-        self.countdown_total = 30
+        self.countdown_total = 6.0  # Tổng thời gian đếm ngược (giây)
         self.countdown_time_left = self.countdown_total
         self.countdown_active = False
 
@@ -199,11 +200,14 @@ class GameBoardScene(BaseScene):
         dt = pygame.time.Clock().tick(60) / 1000  # delta time (giây)
 
         # Cập nhật đồng hồ đếm ngược
-        if self.countdown_active:
+        if (
+            self.client.token_holder == self.client.player_name
+            and self.countdown_active
+        ):
             self.countdown_time_left -= dt
             if self.countdown_time_left <= 0:
-                self.countdown_time_left = 0
-                self.countdown_active = False
+                self.countdown_time_left = self.countdown_total
+                # self.countdown_active = False
                 print("[Timer] Time's up!")
                 # TODO: Hành động khi hết thời gian, ví dụ kết thúc lượt
 
@@ -238,6 +242,7 @@ class GameBoardScene(BaseScene):
                         None,
                     )
                     self.dice.is_rolling = False
+                    # self.start_countdown()
 
             elif message["type"] == "next_token_holder":
                 # if message["current_turn"] != self.client.player_name:
@@ -247,7 +252,17 @@ class GameBoardScene(BaseScene):
                     (c for c in self.characters if c.name == message["current_turn"]),
                     None,
                 )
-                self.countdown_active = False
+                # Đặt lại đồng hồ đếm ngược dựa trên start_time từ server
+                try:
+                    from dateutil.parser import isoparse
+
+                    server_time = isoparse(message.get("start_time"))
+                    now = datetime.utcnow()
+                    delay = (now - server_time).total_seconds()
+                    self.countdown_time_left = max(6.0 - delay, 6.0)
+                except Exception as e:
+                    print("[Warning] Không đồng bộ được thời gian:", e)
+                    self.countdown_time_left = 10.0
 
             message = self.client.get_message_nowait()
 
@@ -305,7 +320,7 @@ class GameBoardScene(BaseScene):
 
             self.dice.final_value = 0
             self.active_character.play_sound_if_moved()
-            self.start_countdown()
+            # self.start_countdown()
             self.dice.final_value = 0
             self.active_character.play_sound_if_moved()
             flag = 1  # Đánh dấu đã gửi hành động
@@ -339,7 +354,7 @@ class GameBoardScene(BaseScene):
         self.dice.draw(screen)
 
         # --- Vẽ chữ "Your turn" trên cùng ---
-        if self.countdown_active:
+        if self.client.token_holder:
             # Tạo hiệu ứng scale cho chữ "Your turn"
             time = pygame.time.get_ticks() / 500  # Thời gian theo ms chia nhỏ
             scale = 1 + 0.1 * math.sin(time * 2 * math.pi)  # Scale dao động 0.9 - 1.1
@@ -361,7 +376,7 @@ class GameBoardScene(BaseScene):
             screen.blit(your_turn_surface, (x, y))
 
         # --- Vẽ đồng hồ đếm ngược ---
-        if self.countdown_active:
+        if self.client.token_holder == self.client.player_name:
             time_left = max(self.countdown_time_left, 0)
             # Hiển thị với 1 chữ số thập phân cho mượt hơn
             time_str = f"Time: {time_left:.1f}s"
@@ -380,16 +395,16 @@ class GameBoardScene(BaseScene):
             screen.blit(
                 text_surface, (self.screen_width - text_surface.get_width() - 20, 20)
             )
-        else:
-            # Hết thời gian
+        # else:
+        #     # Hết thời gian
 
-            times_up_text = "Time's up!"
-            times_up_surface = self.countdown_font.render(
-                times_up_text, True, (255, 0, 0)
-            )
-            x = (self.screen_width - times_up_surface.get_width()) // 2
-            y = 30  # Cách mép trên 30px
-            screen.blit(times_up_surface, (x, y))
+        #     times_up_text = "Time's up!"
+        #     times_up_surface = self.countdown_font.render(
+        #         times_up_text, True, (255, 0, 0)
+        #     )
+        #     x = (self.screen_width - times_up_surface.get_width()) // 2
+        #     y = 30  # Cách mép trên 30px
+        #     screen.blit(times_up_surface, (x, y))
 
         # Vẽ panel UI (nền panel phía dưới bên phải)
         button_width = 180
