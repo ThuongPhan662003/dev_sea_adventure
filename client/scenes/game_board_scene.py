@@ -53,6 +53,8 @@ class GameBoardScene(BaseScene):
         self.dice_sound_path = "./assets/background/dices/dice_sound.wav"
 
         # Các biến còn lại
+        self.goBack_button = None
+        self.goOn_button = None
         self.rock_tiles = []
         self.characters = []
         self.active_character = None
@@ -120,98 +122,6 @@ class GameBoardScene(BaseScene):
             for tile in self.rock_tiles:
                 tile.handle_event(event)
 
-    # def update(self):
-    #     # Check queue for external actions (from server)
-    #     message = self.client.get_message_nowait()
-    #     while message:
-    #         if message["type"] == "external_action":
-    #             sender = message["current_turn"]
-    #             target_character = next(
-    #                 (c for c in self.characters if c.name == sender), None
-    #             )
-    #             if target_character:
-    #                 current_index = message.get("current_turn_index", 0)
-    #                 end_index = min(current_index, len(MAP_POSITIONS))
-
-    #                 steps = [
-    #                     (pos["x"], pos["y"] - 50) for pos in MAP_POSITIONS[0:end_index]
-    #                 ]
-
-    #                 target_character.set_steps(steps, delay=0.5)
-    #                 self.current_position_index = (
-    #                     current_index  # 🔥 Cập nhật lại vị trí mới
-    #                 )
-
-    #                 print(f"[Client] {sender} moved to index {current_index}")
-    #         elif message["type"] == "your_turn":
-    #             # Nếu là lượt của người chơi này, có thể thực hiện hành động
-    #             if message["player"] == self.client.player_name:
-    #                 print(f"[Client] It's your turn, {self.client.player_name}!")
-    #                 self.active_character = next(
-    #                     (
-    #                         c
-    #                         for c in self.characters
-    #                         if c.name == self.client.player_name
-    #                     ),
-    #                     None,
-    #                 )
-    #                 self.dice.is_rolling = False
-    #         message = self.client.get_message_nowait()
-    #     dt = pygame.time.Clock().tick(60) / 1000
-
-    #     keys = pygame.key.get_pressed()
-    #     if keys[pygame.K_LEFT]:
-    #         self.active_character.move("left", dt)
-    #     elif keys[pygame.K_RIGHT]:
-    #         self.active_character.move("right", dt)
-    #     elif keys[pygame.K_UP]:
-    #         self.active_character.move("up", dt)
-    #     elif keys[pygame.K_DOWN]:
-    #         self.active_character.move("down", dt)
-    #     else:
-    #         self.active_character.has_moved = False
-    #     self.dice.update(dt)
-    #     if not self.dice.is_rolling and self.dice.final_value != 0:
-    #         step_count = self.dice.get_value()
-    #         print(f"Dice rolled: {step_count}")
-
-    #         # self.client.send_dice(step_count)
-    #         end_index = min(
-    #             self.current_position_index + step_count, len(MAP_POSITIONS)
-    #         )
-    #         steps = [
-    #             (pos["x"], pos["y"] - 50)
-    #             for pos in MAP_POSITIONS[self.current_position_index : end_index]
-    #         ]
-    #         self.active_character.set_steps(steps, delay=0.5)
-    #         self.current_position_index = end_index
-
-    #         # 👉 Gửi dữ liệu tới server
-    #         # if self.client:
-    #         #     import threading, asyncio
-
-    #         token_data = {
-    #             "position": self.current_position_index
-    #         }  # dữ liệu vị trí hoặc token tùy thiết kế server
-    #         action_data = {
-    #             "steps": step_count,
-    #             "player": self.active_character.name,
-    #         }
-    #         # threading.Thread(
-    #         #     target=lambda: asyncio.run(
-    #         #         self.client.send_action(token_data, action_data)
-    #         #     ),
-    #         #     daemon=True,
-    #         # ).start()
-    #         self.client.send_action(token_data, action_data)
-
-    #         self.dice.final_value = 0  # reset sau khi gửi
-
-    #         self.active_character.play_sound_if_moved()
-    #         # self.dice.update(dt)
-
-    #     for char in self.characters:
-    #         char.update(dt)
     def update(self):
         # Check queue for external actions (from server)
         message = self.client.get_message_nowait()
