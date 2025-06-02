@@ -111,7 +111,13 @@ class GameBoardScene(BaseScene):
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
 
             if self.dice.rect.collidepoint(event.pos):
-                self.dice.handle_click(event.pos)
+                # self.dice.handle_click(event.pos)
+                # ✅ Chặn nếu không phải lượt của người chơi này
+
+                if self.client.token_holder != self.client.player_name:
+                    print("[Client] Không phải lượt của bạn.")
+                else:
+                    self.dice.handle_click(event.pos)
 
             for tile in self.rock_tiles:
                 tile.handle_click(event.pos)
@@ -233,18 +239,16 @@ class GameBoardScene(BaseScene):
                     self.character_positions[sender] = current_index  # ✅ FIXED
                     print(f"[Client] {sender} moved to index {current_index}")
 
-            elif message["type"] == "your_turn":
-                if message["player"] == self.client.player_name:
-                    print(f"[Client] It's your turn, {self.client.player_name}!")
-                    self.active_character = next(
-                        (
-                            c
-                            for c in self.characters
-                            if c.name == self.client.player_name
-                        ),
-                        None,
-                    )
-                    self.dice.is_rolling = False
+            elif message["type"] == "next_token_holder":
+                # if message["current_turn"] != self.client.player_name:
+                print("[Client] It's your turn", message["current_turn"])
+                self.client.token_holder = message["current_turn"]
+                self.active_character = next(
+                    (c for c in self.characters if c.name == message["current_turn"]),
+                    None,
+                )
+                
+
             message = self.client.get_message_nowait()
 
         dt = pygame.time.Clock().tick(60) / 1000
@@ -262,7 +266,7 @@ class GameBoardScene(BaseScene):
             self.active_character.has_moved = False
 
         self.dice.update(dt)
-
+        flag = 0
         if not self.dice.is_rolling and self.dice.final_value != 0:
             step_count = self.dice.get_value()
             print(f"Dice rolled: {step_count}")
@@ -289,9 +293,15 @@ class GameBoardScene(BaseScene):
 
             self.dice.final_value = 0
             self.active_character.play_sound_if_moved()
+            flag = 1  # Đánh dấu đã gửi hành động
 
         for char in self.characters:
             char.update(dt)
+        if flag == 1:
+            self.client.send_turn_update(
+                current_turn=self.client.token_holder,
+            )
+            flag = 0  # Reset flag sau khi gửi
 
     def draw(self, screen):
 
@@ -305,7 +315,12 @@ class GameBoardScene(BaseScene):
             char.draw(screen, self.font)
 
         pygame.draw.rect(screen, (0, 128, 0), self.button_rect)
-        button_label = self.font.render("Start Walk", True, (255, 255, 255))
-        screen.blit(button_label, (self.button_rect.x + 20, self.button_rect.y + 10))
+        # button_label = self.font.render("Start Walk", True, (255, 255, 255))
+        # screen.blit(button_label, (self.button_rect.x + 20, self.button_rect.y + 10))
 
         self.dice.draw(screen)
+        if self.client.token_holder != self.client.player_name:
+            button_label = self.font.render("It's not your turn", True, (255, 255, 255))
+            screen.blit(
+                button_label, (self.button_rect.x + 20, self.button_rect.y + 10)
+            )

@@ -11,7 +11,7 @@ from utils.utils import get_local_ip
 class WebSocketClient:
 
     def __init__(self):
-        self.uri = f"ws://192.168.1.37:5000/ws"
+        self.uri = f"ws://192.168.1.37:5001/ws"
         self.players = []
         self.player_name = None
         self.is_host = False
@@ -120,14 +120,19 @@ class WebSocketClient:
                                 "current_turn_index": data.get("current_turn_index", 0),
                             }
                         )
-                    elif data["type"] == "your_turn":
+                    elif data["type"] == "next_token_oke":
                         # Nếu là lượt của người chơi này, có thể thực hiện hành động
-
-                        print("[WebSocketClient] It's your turn!")
                         # self.send_dice(1)  # Gửi giá trị dice mặc định là 0
-                        # self.message_queue.put(
-                        #     {"type": "your_turn", "player": data.get("players")}
-                        # )
+                        
+                        self.message_queue.put(
+                            {
+                                "type": "next_token_holder",
+                                "player": data.get("players"),
+                                "current_turn": data.get("current_turn"),
+                            }
+                        )
+
+                        self.client.token_holder = data.get("current_turn")
 
         except websockets.exceptions.ConnectionClosed as e:
             print(
@@ -187,3 +192,13 @@ class WebSocketClient:
 
     def get_map_tile(self, index):
         return self.map_state[index] if 0 <= index < len(self.map_state) else None
+
+    def send_turn_update(self, current_turn):
+        """Gửi thông tin lượt chơi tiếp theo"""
+        self.send(
+            {
+                "type": "next_token",
+                "sender": self.player_name,
+                "current_turn": current_turn,
+            }
+        )

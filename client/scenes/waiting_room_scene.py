@@ -36,7 +36,7 @@ class WaitingRoomScene(BaseScene):
                 #     daemon=True,
                 # ).start()
                 self.client.send_start_game()
-                self.manager.set_scene("main_scene")
+                # self.manager.set_scene("main_scene")
 
     def update(self):
         # Kiểm tra xem có tin nhắn nào mới từ server không
@@ -45,8 +45,6 @@ class WaitingRoomScene(BaseScene):
             # while True:
             print(f"[WaitingRoomScene] Received message: {message}")
             if message["type"] == "start":
-                # while True:
-                #     print("message", message)
                 self.client.map_state = message.get("map")
                 self.client.token_holder = message.get("current_turn")
 
