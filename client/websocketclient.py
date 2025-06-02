@@ -123,7 +123,7 @@ class WebSocketClient:
                     elif data["type"] == "next_token_oke":
                         # Nếu là lượt của người chơi này, có thể thực hiện hành động
                         # self.send_dice(1)  # Gửi giá trị dice mặc định là 0
-                        
+                        print("data", data)
                         self.message_queue.put(
                             {
                                 "type": "next_token_holder",
@@ -132,8 +132,12 @@ class WebSocketClient:
                             }
                         )
 
-                        self.client.token_holder = data.get("current_turn")
-
+                        self.token_holder = data.get("current_turn")
+                        print(
+                            "[WebSocketClient] Token holder updated:",
+                            self.token_holder,
+                        )
+                    print("[WebSocketClient] Nhận message:", data)
         except websockets.exceptions.ConnectionClosed as e:
             print(
                 f"[WebSocketClient] ❌ Kết nối bị đóng. Code: {e.code}, reason: {e.reason}"
