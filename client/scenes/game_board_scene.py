@@ -221,11 +221,24 @@ class GameBoardScene(BaseScene):
                 )
                 if target_character:
                     current_index = message.get("current_turn_index", 0)
-                    end_index = min(current_index, len(MAP_POSITIONS))
+                    start_index = self.character_positions.get(sender, 0)
+                    end_index = min(
+                        message.get("current_turn_index", 0), len(MAP_POSITIONS)
+                    )
+
+                    if start_index <= end_index:
+                        step_range = range(start_index, end_index + 1)
+                    else:
+                        step_range = range(start_index, end_index - 1, -1)
 
                     steps = [
-                        (pos["x"], pos["y"] - 50) for pos in MAP_POSITIONS[0:end_index]
+                        (MAP_POSITIONS[i]["x"], MAP_POSITIONS[i]["y"] - 50)
+                        for i in step_range
                     ]
+
+                    # steps = [
+                    #     (pos["x"], pos["y"] - 50) for pos in MAP_POSITIONS[0:end_index]
+                    # ]
                     target_character.set_steps(steps, delay=0.5)
                     self.character_positions[sender] = current_index
                     print(f"[Client] {sender} moved to index {current_index}")
@@ -288,8 +301,8 @@ class GameBoardScene(BaseScene):
             print(f"Dice rolled: {step_count}")
 
             player_name = self.active_character.name
-            start_index = self.character_positions.get(player_name, -1)
-
+            # start_index = self.character_positions.get(player_name, -1)
+            start_index = self.client.player_states.get(player_name)["position_index"]
             if self.move_status == "Go Back":
                 step_range = [
                     i
@@ -309,11 +322,20 @@ class GameBoardScene(BaseScene):
                     for i in step_range
                 ]
                 self.active_character.set_steps(steps, delay=0.5)
-
+                print("[Client] Moving character:", self.client.player_states)
+                self.client.player_states.get(player_name)["position_index"] = (
+                    self.client.player_states.get(player_name)["position_index"]
+                ) + step_count
                 end_index = step_range[-1]
+                # ✅ Cập nhật lại vị trí
+                print(
+                    f"[Client] {player_name} moved to index {end_index} (start: {start_index}, steps: {step_count})"
+                )
+                print(self.character_positions[player_name])
                 self.character_positions[player_name] = end_index
+                self.client.player_states[player_name]["position_index"] = end_index
 
-                token_data = {"position": end_index}
+                token_data = {"position": end_index, "start_index": start_index}
                 action_data = {"steps": step_count, "player": player_name}
                 self.client.send_action(token_data, action_data)
                 self.active_character.play_sound_if_moved()
