@@ -3,6 +3,8 @@ from database import get_session
 from models import Player
 import json
 
+from utils.utils import create_game_map
+
 router = APIRouter()
 
 # ==== TRẠNG THÁI GAME ====
@@ -154,8 +156,8 @@ async def handle_start_game(websocket: WebSocket):
         print("Không có người chơi để bắt đầu game.")
         return
 
-    # map_data = generate_random_map()  # nếu có bản đồ
-
+    map_data = create_game_map()  # nếu có bản đồ
+    print("Bản đồ game đã được tạo:", map_data)
     # Lấy WebSocket của người đầu tiên (host)
     host_name = players[0]
     host_ws = player_ws_map.get(host_name)

@@ -45,12 +45,15 @@ class WaitingRoomScene(BaseScene):
             # while True:
             print(f"[WaitingRoomScene] Received message: {message}")
             if message["type"] == "start":
+                # while True:
+                #     print("message", message)
+                self.client.map_state = message.get("map")
+                self.client.token_holder = message.get("current_turn")
 
-                print("[WaitingRoomScene] Game start message received.")
-                self.client.map_data = message["map"]
-                self.client.token_holder = message["current_turn"]
                 self.client.phase = "playing"
                 self.client.players = message["players"]
+
+                self.client.current_turn_index = 0
                 self.on_game_started()
             message = self.client.get_message_nowait()
 
