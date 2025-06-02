@@ -11,7 +11,7 @@ from utils.utils import get_local_ip
 class WebSocketClient:
 
     def __init__(self):
-        self.uri = f"ws://192.168.1.37/ws"
+        self.uri = f"ws://192.168.1.25:5000/ws"
         self.players = []
         self.player_name = None
         self.is_host = False
