@@ -13,7 +13,6 @@ class WebSocketClient:
     def __init__(self):
 
         self.uri = f"ws://{get_local_ip()}/ws"
-
         self.players = []
         self.player_name = None
         self.is_host = False

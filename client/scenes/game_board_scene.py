@@ -8,6 +8,8 @@ from .base_scene import BaseScene
 from .components.character import Character
 from .components.dice import Dice
 from .components.button import Button
+from .components.timer import Timer
+
 import asyncio
 
 
@@ -18,6 +20,8 @@ class GameBoardScene(BaseScene):
         self.client = websocket_client
         self.font = pygame.font.SysFont(None, 36)
         self.countdown_font = pygame.font.SysFont(None, 48)
+        # Timer
+        self.timer = Timer(total_time=15.0)
 
         # Screen size cố định
         self.screen_width = 1200
@@ -193,11 +197,12 @@ class GameBoardScene(BaseScene):
         # TODO: Thêm logic khi bấm Drop Down
 
     def start_countdown(self):
-        self.countdown_time_left = self.countdown_total
-        self.countdown_active = True
+        self.timer.start()
+
 
     def update(self):
         dt = pygame.time.Clock().tick(60) / 1000  # delta time (giây)
+
 
         # Cập nhật đồng hồ đếm ngược
         if (
@@ -210,6 +215,7 @@ class GameBoardScene(BaseScene):
                 # self.countdown_active = False
                 print("[Timer] Time's up!")
                 # TODO: Hành động khi hết thời gian, ví dụ kết thúc lượt
+
 
         # Xử lý message từ server (client)
         message = self.client.get_message_nowait()
@@ -376,16 +382,16 @@ class GameBoardScene(BaseScene):
             screen.blit(your_turn_surface, (x, y))
 
         # --- Vẽ đồng hồ đếm ngược ---
+
         if self.client.token_holder == self.client.player_name:
             time_left = max(self.countdown_time_left, 0)
             # Hiển thị với 1 chữ số thập phân cho mượt hơn
+
             time_str = f"Time: {time_left:.1f}s"
 
-            # Chuyển màu mượt từ xanh sang đỏ khi còn dưới 5 giây
             if time_left > 5:
                 time_color = (0, 255, 0)
             else:
-                # Lerp màu xanh->đỏ theo thời gian còn lại
                 ratio = time_left / 5
                 r = int(255 * (1 - ratio))
                 g = int(255 * ratio)
@@ -395,6 +401,7 @@ class GameBoardScene(BaseScene):
             screen.blit(
                 text_surface, (self.screen_width - text_surface.get_width() - 20, 20)
             )
+
         # else:
         #     # Hết thời gian
 
@@ -405,6 +412,7 @@ class GameBoardScene(BaseScene):
         #     x = (self.screen_width - times_up_surface.get_width()) // 2
         #     y = 30  # Cách mép trên 30px
         #     screen.blit(times_up_surface, (x, y))
+
 
         # Vẽ panel UI (nền panel phía dưới bên phải)
         button_width = 180
