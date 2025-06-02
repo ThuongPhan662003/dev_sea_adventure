@@ -66,8 +66,8 @@ async def broadcast_token_ring(websocket_from: WebSocket, message: dict):
     global players, player_ws_map, clients
     print("->>>>bắt đầu gửi theo vòng", message)
 
-    if not players or len(players) < 2:
-        return
+    # if not players or len(players) < 2:
+    #     return
 
     sender_name = get_player_name_by_ws(websocket_from)
     if sender_name is None:
@@ -76,7 +76,7 @@ async def broadcast_token_ring(websocket_from: WebSocket, message: dict):
 
     current_name = sender_name
     current_ws = websocket_from
-
+    print(f"Người gửi hiện tại: {current_name}, WebSocket: {current_ws}")
     for _ in range(len(players)):
         print(f"action-  Đang gửi từ: {current_name}")
         print("bí mat", message)
@@ -92,6 +92,10 @@ async def broadcast_token_ring(websocket_from: WebSocket, message: dict):
         if current_name not in players:
             print(f"[broadcast] {current_name} đã bị ngắt kết nối, dừng vòng.")
             return
+        
+    if len(clients) == 1:
+        await send_to_next_player_from_to(current_ws, message)
+        print(f"[broadcast] Chỉ còn {current_name} trong game, dừng vòng.")
     print("->>>>Kết thúc gửi theo vòng")
 
 
@@ -179,6 +183,7 @@ async def handle_start_game(websocket: WebSocket):
     if not host_ws:
         print(f"Không tìm thấy WebSocket cho host: {host_name}")
         return
+    
     # Gửi theo vòng bắt đầu từ người host
     await broadcast_token_ring(
         host_ws,

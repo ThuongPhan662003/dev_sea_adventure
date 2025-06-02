@@ -12,7 +12,7 @@ class WebSocketClient:
 
     def __init__(self):
 
-        self.uri = f"ws://192.168.1.37:5001/ws"
+        self.uri = f"ws://192.168.1.25:5000/ws"
 
         self.players = []
         self.player_name = None
