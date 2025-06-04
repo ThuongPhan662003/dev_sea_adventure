@@ -53,5 +53,5 @@ class HomeScene(BaseScene):
         screen.blit(title, (screen.get_width() // 2 - title.get_width() // 2, 150))
 
         # Vẽ các nút
-        self.draw_button(screen, self.join_button, "Join Room")
-        self.draw_button(screen, self.create_button, "Create Room")
+        # self.draw_button(screen, self.join_button, "Join Room")
+        self.draw_button(screen, self.create_button, "Join Room")

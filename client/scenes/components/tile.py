@@ -15,10 +15,14 @@ class RockTile:
 
     def draw(self, screen):
         screen.blit(self.image, self.rect.topleft)
-        
-        icon_path = "./assets/background/treasure/open.png" if self.collected else "./assets/background/treasure/close.png"
-        abs_path = os.path.abspath(icon_path)
-        print(f"Loading sound: {abs_path}")
+
+
+        icon_path = (
+            "./assets/background/treasure/open.png"
+            if self.collected
+            else "./assets/background/treasure/close.png"
+        )
+
         treasure_icon = pygame.image.load(icon_path).convert_alpha()
         treasure_icon = pygame.transform.scale(treasure_icon, (30, 30))
         screen.blit(treasure_icon, (self.rect.right - 40, self.rect.top + 60))

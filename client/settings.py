@@ -1,6 +1,8 @@
 import pygame
 from os.path import join
 from os import walk
+from dotenv import load_dotenv
+import os
 
 WINDOW_WIDTH, WINDOW_HEIGHT = 1280, 720
 
@@ -24,4 +26,11 @@ GAP = 10
 LEN_MAP = 20
 MAP_POSITIONS = []  # To store the positions of the tiles on the map
 
-PORT = 5000
+PORT = 5001
+# Load biến môi trường từ file .env
+load_dotenv()
+
+# Lấy SERVER từ biến môi trường
+server = os.getenv("SERVER_IP", "localhost")  # fallback = localhost nếu không có
+
+

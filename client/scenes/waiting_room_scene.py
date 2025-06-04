@@ -29,29 +29,35 @@ class WaitingRoomScene(BaseScene):
         self.manager.set_scene("main_scene")
 
     def handle_event(self, event):
-        if event.type == pygame.MOUSEBUTTONDOWN and self.client.is_host:
-            if self.start_button.collidepoint(event.pos):
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            if self.client.is_host and self.start_button.collidepoint(event.pos):
                 # threading.Thread(
                 #     target=lambda: asyncio.run(self.client.send_start_game()),
                 #     daemon=True,
                 # ).start()
                 self.client.send_start_game()
-                self.manager.set_scene("main_scene")
+                # self.manager.set_scene("main_scene")
 
     def update(self):
         # Kiểm tra xem có tin nhắn nào mới từ server không
         message = self.client.get_message_nowait()
         while message:
             # while True:
-            print(f"[WaitingRoomScene] Received message: {message}")
             if message["type"] == "start":
+                self.client.map_state = message.get("map")
+                self.client.token_holder = message.get("current_turn")
 
-                print("[WaitingRoomScene] Game start message received.")
-                self.client.map_data = message["map"]
-                self.client.token_holder = message["current_turn"]
                 self.client.phase = "playing"
                 self.client.players = message["players"]
+
+                self.client.current_turn_index = 0
                 self.on_game_started()
+            elif message["type"] == "game_resync":
+
+                print("players:", self.client.players)
+                print("player_states:", self.client.player_states)
+
+                self.manager.set_scene("main_scene")
             message = self.client.get_message_nowait()
 
     def draw(self, screen):

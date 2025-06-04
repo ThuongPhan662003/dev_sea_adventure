@@ -3,7 +3,7 @@ import os
 
 
 class Character:
-    def __init__(self, name, folder_path, position, sound_path=None, channel_index=0):
+    def __init__(self, name, folder_path, position, sound_path=None, channel_index=0, label_image_path=None):
         self.name = name
         self.position = list(position)
         self.frames = []
@@ -12,6 +12,13 @@ class Character:
         self.animation_timer = 0
         self.animation_speed = 0.15
         self.speed = 150  # pixel/second
+
+        # Load label image nếu có đường dẫn truyền vào
+        if label_image_path:
+            self.label_image = pygame.image.load(label_image_path).convert_alpha()
+            self.label_image = pygame.transform.scale(self.label_image, (48, 48))
+        else:
+            self.label_image = None
 
         self.sound = pygame.mixer.Sound(sound_path) if sound_path else None
         self.channel = pygame.mixer.Channel(channel_index) if sound_path else None
@@ -25,9 +32,7 @@ class Character:
     def load_frames(self, folder_path):
         for filename in sorted(os.listdir(folder_path)):
             if filename.endswith(".png"):
-                image = pygame.image.load(
-                    os.path.join(folder_path, filename)
-                ).convert_alpha()
+                image = pygame.image.load(os.path.join(folder_path, filename)).convert_alpha()
                 image = pygame.transform.scale(image, (48, 48))
                 self.frames.append(image)
 
@@ -49,11 +54,19 @@ class Character:
                     self.step_index = 0
 
     def draw(self, screen, font):
-        frame = self.frames[self.current_frame]
-        x, y = self.position
-        screen.blit(frame, (x, y))
-        label = font.render(self.name, True, (0, 0, 0))
-        screen.blit(label, (x - 10, y - 25))
+        # Vẽ sprite hiện tại
+        screen.blit(self.frames[self.current_frame], self.position)
+
+        # Vẽ tên hoặc hình label (ngôi sao)
+        name_x = self.position[0]
+        name_y = self.position[1] - 50  # vị trí dưới chân nhân vật
+
+        if self.label_image:
+            label_rect = self.label_image.get_rect(center=(name_x + 24, name_y + 24))
+            screen.blit(self.label_image, label_rect)
+        else:
+            name_surface = font.render(self.name, True, (255, 255, 255))
+            screen.blit(name_surface, (name_x, name_y))
 
     def move(self, direction, dt):
         old_pos = self.position[:]

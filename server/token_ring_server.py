@@ -1,33 +1,82 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from asyncio import create_task, sleep
+import asyncio
+from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse
 from database import get_session
 from models import Player
 import json
+from datetime import datetime
+from utils.utils import create_game_map
+from fastapi.templating import Jinja2Templates
 
+templates = Jinja2Templates(directory="templates")
 router = APIRouter()
 
 # ==== TRẠNG THÁI GAME ====
 clients: list[WebSocket] = []
-players: list[str] = []  # Tên người chơi
+players: list[str] = []
 player_ws_map: dict[str, WebSocket] = {}
 current_turn_index: int = 0
 map_data: dict = {}
-current_game_id: int = 1  # giả sử bạn đã tạo game trong DB và lấy id
-player_ids: dict[str, int] = {}  # ánh xạ name -> player_id
 
+current_game_id: int = 1
+player_ids: dict[str, int] = {}
+
+current_turn_name: str | None = None
+token_start_time: datetime | None = None
+current_turn_ws: WebSocket | None = None
+token_timeout_task = None
+player_states: dict = {}
+start_game = False  # Biến để xác định đã bắt đầu game hay chưa
+token_ring_logs: list[str] = []
+heartbeat_status: dict[str, str] = {}  # player_name -> "✅ Alive" hoặc "💀 Lost"
+
+
+# ==== RESET GAME STATE ====
+def reset_game_state():
+    global players, player_ws_map, player_ids, current_turn_index
+    global map_data, current_turn_name, token_start_time, current_turn_ws
+    global token_timeout_task, clients, start_game, player_states, token_ring_logs, heartbeat_status
+
+    print("✅ Đang reset toàn bộ trạng thái server...")
+    players.clear()
+    player_ws_map.clear()
+    player_ids.clear()
+    current_turn_index = 0
+    map_data = {}
+    current_turn_name = None
+    token_start_time = None
+    current_turn_ws = None
+    if token_timeout_task and not token_timeout_task.done():
+        token_timeout_task.cancel()
+    token_timeout_task = None
+    start_game = False
+    clients.clear()
+    player_states.clear()
+    token_ring_logs.clear()
+    heartbeat_status.clear()
+
+
+sse_clients: list[asyncio.Queue] = []
 
 # ==== HÀM XỬ LÝ ====
-async def send_to_next_player_from_to(websocket_from: WebSocket, message: dict):
-    global players, player_ws_map, clients
-    # print("player_ws_map:", player_ws_map)
-    # print("players:", players)
-    # print("clients:", clients)
-    sender_name = None
-    for name, ws in player_ws_map.items():
-        # print(f"Checking player: {name}, WebSocket: {ws}")
-        if ws == websocket_from:
-            sender_name = name
-            break
+# Danh sách client SSE: mỗi client là 1 asyncio.Queue để gửi dữ liệu bất đồng bộ
 
+
+async def broadcast_logs():
+    data = json.dumps(
+        {
+            "token_ring_logs": token_ring_logs,
+            "current_turn": current_turn_name,
+            "players": players,
+        }
+    )
+    for queue in sse_clients:
+        await queue.put(data)
+
+
+async def send_to_next_player_from_to(websocket_from: WebSocket, message: dict):
+    sender_name = get_player_name_by_ws(websocket_from)
     if sender_name is None or sender_name not in players:
         print("Người gửi không xác định hoặc đã rời game.")
         return
@@ -36,24 +85,25 @@ async def send_to_next_player_from_to(websocket_from: WebSocket, message: dict):
     next_index = (current_index + 1) % len(players)
     next_player = players[next_index]
     websocket_to = player_ws_map.get(next_player)
-    print("người nhận", next_player)
+    print("Người nhận:", next_player)
 
     if websocket_to:
         try:
             await websocket_to.send_text(json.dumps(message))
         except Exception as e:
-            print("danh sách người chơi", players)
-            print(f"Lỗi khi gửi tới người kế tiếp: {next_player} - {e}")
+            print(f"Lỗi khi gửi tới {next_player}: {e}")
             if websocket_to in clients:
                 clients.remove(websocket_to)
-            if next_player in player_ws_map:
-                del player_ws_map[next_player]
-            if next_player in players:
-                players.remove(next_player)
+            player_ws_map.pop(next_player, None)
+            players.remove(next_player)
+    # token_ring_logs.append(
+    #     f"{datetime.utcnow().isoformat()} - Token moved to {next_player}"
+    # )
+    # **Gửi log mới cho các client SSE**
+    await broadcast_logs()
 
 
 def get_player_name_by_ws(ws: WebSocket):
-    global player_ws_map
     for name, sock in player_ws_map.items():
         if sock == ws:
             return name
@@ -61,40 +111,30 @@ def get_player_name_by_ws(ws: WebSocket):
 
 
 async def broadcast_token_ring(websocket_from: WebSocket, message: dict):
-    global players, player_ws_map, clients
-    print("->>>>bắt đầu gửi theo vòng", message)
-
-    if not players or len(players) < 2:
-        return
-
     sender_name = get_player_name_by_ws(websocket_from)
     if sender_name is None:
-        print("Người gửi không xác định.")
         return
 
     current_name = sender_name
     current_ws = websocket_from
 
     for _ in range(len(players)):
-        print(f"action-  Đang gửi từ: {current_name}")
-        print("bí mat", message)
-        # if message["current_turn"] != current_name:
+
         await send_to_next_player_from_to(current_ws, message)
 
-        # Lấy người kế tiếp trong danh sách vòng
         next_index = (players.index(current_name) + 1) % len(players)
         current_name = players[next_index]
         current_ws = player_ws_map[current_name]
-        # Nếu người nhận bị loại trong quá trình gửi, dừng vòng luôn
-        print("người chơi và danh sách", current_name, players)
         if current_name not in players:
-            print(f"[broadcast] {current_name} đã bị ngắt kết nối, dừng vòng.")
+            print(f"{current_name} đã bị ngắt kết nối, dừng vòng.")
             return
-    print("->>>>Kết thúc gửi theo vòng")
+
+    if len(clients) == 1:
+        await send_to_next_player_from_to(current_ws, message)
+    print("Kết thúc gửi vòng token")
 
 
 async def send_to(ws: WebSocket, message: dict):
-    global clients
     try:
         await ws.send_text(json.dumps(message))
     except:
@@ -103,7 +143,6 @@ async def send_to(ws: WebSocket, message: dict):
 
 
 def current_turn():
-    global current_turn_index, players
     if players:
         return players[current_turn_index]
     return None
@@ -116,56 +155,71 @@ def advance_turn():
 
 
 def remove_client(ws: WebSocket):
-    global clients, players, player_ws_map
     if ws in clients:
         clients.remove(ws)
-    for name, sock in player_ws_map.items():
+    for name, sock in list(player_ws_map.items()):
         if sock == ws:
             players.remove(name)
-            del player_ws_map[name]
+            player_ws_map.pop(name, None)
+            player_ids.pop(name, None)
             break
+
+    if not clients:
+        print("⚠️ Không còn người chơi nào. Reset server state.")
+        reset_game_state()
+        print("players:", clients)
 
 
 async def handle_join(name: str, websocket: WebSocket):
-    global players, player_ws_map, clients
+
+    global players, player_ws_map, clients, start_game
     # Nếu người chơi chưa tồn tại, thêm vào danh sách
+
     if name not in players:
         players.append(name)
         player_ws_map[name] = websocket
         clients.append(websocket)
 
-        # Lưu người chơi mới vào cơ sở dữ liệu
         with get_session() as session:
             session.add(Player(player_name=name))
             session.commit()
-    # print(f"Player {name} joined. Current players: {players}")
-    # Gửi phản hồi riêng cho client đã join
-    await send_to(websocket, {"type": "join_accepted", "players": players})
 
-    # Gửi cập nhật danh sách phòng chờ đến tất cả client khác
+    await send_to(websocket, {"type": "join_accepted", "players": players})
     await broadcast_token_ring(
         websocket, {"type": "waiting_room_update", "players": players}
     )
 
+    if start_game:
+        print("Game đã bắt đầu, không gửi lại danh sách người chơi.")
+        await send_to(
+            websocket,
+            {
+                "type": "game_resync",
+                "player_states": player_states,
+                "map_data": map_data,
+            },
+        )
+
 
 async def handle_start_game(websocket: WebSocket):
-    global players, player_ws_map, current_turn_index, map_data
+    global current_turn_name, token_start_time, current_turn_ws, players, player_ws_map, current_turn_index, map_data, start_game
+    current_turn_name = players[0]  # hoặc host_name
+    token_start_time = datetime.utcnow()
+    current_turn_ws = player_ws_map.get(current_turn_name)
+    print(f"Khởi tạo game với người chơi: {current_turn_name}{current_turn_ws}")
+
     if not players:
-        print("Không có người chơi để bắt đầu game.")
         return
-
-    # map_data = generate_random_map()  # nếu có bản đồ
-
-    # Lấy WebSocket của người đầu tiên (host)
+    map_data = create_game_map()
     host_name = players[0]
     host_ws = player_ws_map.get(host_name)
-
     if not host_ws:
         print(f"Không tìm thấy WebSocket cho host: {host_name}")
         return
+    start_game = True
     # Gửi theo vòng bắt đầu từ người host
     await broadcast_token_ring(
-        host_ws,
+        current_turn_ws,
         {
             "type": "start",
             "players": players,
@@ -174,35 +228,143 @@ async def handle_start_game(websocket: WebSocket):
         },
     )
 
+    await start_token_timeout(current_turn_ws, current_turn_name)
 
-async def handle_action(name: str, data: dict, websocket: WebSocket):
-    global players, player_ws_map, current_turn_index, map_data
-    # if name != current_turn():
-    #     await send_to(
-    #         websocket, {"type": "error", "message": "Không phải lượt của bạn!"}
-    #     )
-    #     return
 
-    next_player = current_turn()
-    next_player_id = player_ids.get(next_player)
-    print("biết", name, data)
-    next_player_ws = player_ws_map.get(next_player)
+async def handle_action(
+    name: str,
+    data: dict,
+    player_states_data: dict,
+    map: dict,
+    websocket: WebSocket,
+):
+    global players, player_ws_map, current_turn_index, map_data, player_states
+    player_states = player_states_data
+    map_data = map
+    # Kiểm tra xem người gửi có phải đang giữ token không
+
     # Gửi thông tin cập nhật theo Token Ring
     await broadcast_token_ring(
         websocket,
         {
             "type": "turn_update",
             "sender": name,
-            # "map": map_data,
-            # "player_positions": player_positions,
-            # "updated_player": {"name": name, "new_position": current_player_position},
             "current_turn": name,
             "current_turn_index": data,
         },
     )
-    # Chuyển lượt
+
+
+async def handle_next_token(websocket: WebSocket, message: dict):
     advance_turn()
-    # await send_to(next_player_ws, {"type": "your_turn", "players": players})
+    next_player = current_turn()
+    next_ws = player_ws_map.get(next_player)
+
+    if not next_ws:
+        print(f"Không tìm thấy WebSocket cho {next_player}")
+        return
+
+    token_ring_logs.clear()  # clear log token ring
+
+    # token_ring_logs.append(
+    #     f"{datetime.utcnow().isoformat()} - Token moved to {next_player}"
+    # )
+    await broadcast_token_ring(
+        next_ws,
+        {
+            "type": "next_token_oke",
+            "current_turn": next_player,
+            "players": players,
+            "start_time": datetime.utcnow().isoformat(),
+        },
+    )
+    global current_turn_name, token_start_time, current_turn_ws
+    current_turn_name = next_player
+    token_start_time = datetime.utcnow()
+    current_turn_ws = next_ws
+    await start_token_timeout(current_turn_ws, current_turn_name)
+    token_ring_logs.append(
+        f"{datetime.utcnow().isoformat()} - Token moved to {next_player}"
+    )
+
+
+async def handle_game_over(websocket: WebSocket, message: dict):
+    global token_timeout_task
+
+    winner = message.get("winner")
+    if not winner:
+        print("Không có người chiến thắng.")
+        return
+
+    # Gửi thông báo kết thúc đến tất cả clients
+    await broadcast_token_ring(
+        websocket,
+        {
+            "type": "end_game",
+            "winner": winner,
+            "players": players,
+        },
+    )
+
+    # Cho client thời gian nhận message
+    await asyncio.sleep(1)
+
+    # Xóa từng client bằng remove_client
+    for ws in list(clients):  # copy để tránh thay đổi trong khi lặp
+        remove_client(ws)
+        # try:
+        #     await ws.close()
+        # except:
+        #     pass  # trong trường hợp client đã tự ngắt
+
+    # Hủy task timeout nếu còn
+    if token_timeout_task and not token_timeout_task.done():
+        token_timeout_task.cancel()
+    global start_game
+    start_game = False
+    # # Reset tất cả state
+    # reset_game_state()
+    # print("✅ Trò chơi kết thúc. Server đã reset.")
+
+
+def get_token_elapsed_seconds():
+    if token_start_time:
+        return int((datetime.utcnow() - token_start_time).total_seconds())
+    return 0
+
+
+async def start_token_timeout(ws: WebSocket, player_name: str):
+    global current_turn_name, token_start_time, current_turn_ws, token_timeout_task
+
+    current_turn_name = player_name
+    token_start_time = datetime.utcnow()
+    current_turn_ws = ws
+
+    if token_timeout_task and not token_timeout_task.done():
+        token_timeout_task.cancel()
+
+    async def timeout_handler():
+        await sleep(20)
+        print(f"[TIMEOUT] {player_name} đã giữ token quá 20s.")
+        await handle_next_token(ws, {"type": "auto_next_due_to_timeout"})
+
+    token_timeout_task = create_task(timeout_handler())
+
+
+async def heartbeat_checker():
+    while True:
+        for ws in list(clients):
+            player_name = get_player_name_by_ws(ws)
+            try:
+                await ws.send_text(json.dumps({"type": "heartbeat"}))
+                if player_name:
+                    heartbeat_status[player_name] = "✅ Alive"
+            except Exception:
+                print(f"💀 Mất kết nối với: {player_name}")
+                if player_name:
+                    heartbeat_status[player_name] = "💀 Lost"
+                remove_client(ws)
+        await asyncio.sleep(5)
 
 
 # ==== ENDPOINT WEBSOCKET ====
@@ -214,31 +376,94 @@ async def websocket_game(websocket: WebSocket):
     clients.append(websocket)
 
     try:
+        print("Client connected:", websocket.client)
+        print("Current players:", players)
         while True:
             data = await websocket.receive_text()
             message = json.loads(data)
             print(f"Received message: {message}")
+
             if message["type"] == "join":
-                print(f"Player {message['name']} is trying to join.")
                 await handle_join(message["name"], websocket)
 
             elif message["type"] == "start_game":
                 await handle_start_game(websocket)
-            elif message["type"] == "action":
-                print(f"Player {message['sender']} is taking an action.")
-                await handle_action(
-                    message["sender"], message["token_data"]["position"], websocket
-                )
-            elif message["type"] == "role_dice":
-                print("Handling dice roll...", message)
-                # print(f"Player {message['type']} rolled dice: {message['total']}")
-            # elif message["type"] == "your_turn":
-            #     print(f"It's {message['player']}'s turn.")
-            #     # Xử lý lượt của người chơi
 
+            elif message["type"] == "action":
+                await handle_action(
+                    message["sender"],
+                    message["token_data"]["position"],
+                    message["player_states_data"],
+                    message["map_data"],
+                    websocket,
+                )
+
+            elif message["type"] == "next_token":
+                await handle_next_token(websocket, message)
+
+            elif message["type"] == "game_over":
+                await handle_game_over(websocket, message)
+            elif message["type"] == "heartbeat_response":
+                print("Received heartbeat response from client.")
+                player_name = get_player_name_by_ws(websocket)
+                if player_name:
+                    heartbeat_status[player_name] = "✅ Alive"
+
+    except asyncio.TimeoutError:
+        pass
     except WebSocketDisconnect:
-        # remove_client(websocket)
         print("Client disconnected.")
+        remove_client(websocket)
         await broadcast_token_ring(
             websocket, {"type": "player_disconnected", "players": players}
         )
+
+
+from fastapi.responses import StreamingResponse
+
+
+def get_token_elapsed_seconds():
+    if token_start_time:
+        return int((datetime.utcnow() - token_start_time).total_seconds())
+    return 0
+
+
+@router.get("/token-log-stream")
+async def token_log_stream():
+    async def event_generator():
+        queue = asyncio.Queue()
+        sse_clients.append(queue)
+        try:
+            while True:
+                elapsed = get_token_elapsed_seconds()
+                remaining = max(0, 20 - elapsed)  # bạn đang đặt timeout là 20 giây
+
+                data = json.dumps(
+                    {
+                        "token_ring_logs": token_ring_logs,
+                        "current_turn": current_turn_name,
+                        "players": players,
+                        "time_remaining": remaining,
+                        "heartbeat_status": heartbeat_status,
+                    }
+                )
+
+                await queue.put(data)
+                yield f"data: {await queue.get()}\n\n"
+                await asyncio.sleep(1)  # cập nhật mỗi giây
+        except asyncio.CancelledError:
+            pass
+        finally:
+            sse_clients.remove(queue)
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+@router.get("/token-log", response_class=HTMLResponse)
+async def token_log_page(request: Request):
+    return templates.TemplateResponse("token_log.html", {"request": request})
+
+
+@router.on_event("startup")
+async def start_heartbeat():
+    create_task(heartbeat_checker())

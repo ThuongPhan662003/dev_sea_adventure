@@ -29,6 +29,12 @@ class ConnectScene(BaseScene):
         self.input_box_color = COLORS["white"]
         self.input_active = False
         self.input_text = ""
+        self.reset_button = pygame.Rect(
+            (self.WIDTH - BUTTON_WIDTH) // 2,
+            self.HEIGHT // 2 + 150,
+            BUTTON_WIDTH,
+            BUTTON_HEIGHT,
+        )
 
     def on_enter(self):
         print("Entered connect scene.")
@@ -44,16 +50,29 @@ class ConnectScene(BaseScene):
                 if name:
                     print(f"Connecting with name: {name}")
 
-                    # Khởi động websocket trong luồng ngầm
                     self.client.start(name)
                     self.manager.set_scene("waiting")
             elif event.key == pygame.K_BACKSPACE:
                 self.input_text = self.input_text[:-1]
             else:
                 self.input_text += event.unicode
+        # elif event.type == pygame.MOUSEBUTTONDOWN and self.reset_button.collidepoint(
+        #     event.pos
+        # ):
+        #     import os, sys
+
+        #     os.execv(sys.executable, ["python"] + sys.argv)
 
     def update(self):
         pass
+        # # Kiểm tra xem có tin nhắn nào mới từ server không
+        # message = self.client.get_message_nowait()
+        # while message:
+        #     # while True:
+        #     print(f"[WaitingRoomScene] Received message: {message}")
+        #     if message["type"] == "game_resync":
+        #         self.manager.set_scene("main_scene")
+        #     message = self.client.get_message_nowait()
 
     def draw(self, screen):
         # Vẽ background trước
@@ -83,3 +102,11 @@ class ConnectScene(BaseScene):
             self.font.render(self.input_text, True, (0, 0, 0)),
             (self.input_box.x + 5, self.input_box.y + 5),
         )
+        # Vẽ khung nút
+
+        # pygame.draw.rect(screen, (70, 130, 180), self.reset_button, border_radius=12)
+
+        # # Vẽ chữ lên nút
+        # label = self.font.render("Reset Game", True, COLORS["white"])
+        # label_rect = label.get_rect(center=self.reset_button.center)
+        # screen.blit(label, label_rect)
