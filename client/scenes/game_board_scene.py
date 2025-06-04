@@ -8,6 +8,7 @@ from .base_scene import BaseScene
 from .components.character import Character
 from .components.dice import Dice
 from .components.button import Button
+from .game_over_scene import GameOverScene
 import asyncio
 
 
@@ -276,6 +277,13 @@ class GameBoardScene(BaseScene):
                 except Exception as e:
                     print("[Warning] Không đồng bộ được thời gian:", e)
                     self.countdown_time_left = 10.0
+            
+            elif message["type"] == "end_game":
+                winner = message.get("winner")
+                print(f"[Client] Game Over! Winner: {winner}")
+                self.manager.set_scene("game_over")
+                self.manager.active_scene.winner_name = winner
+                return
 
             message = self.client.get_message_nowait()
 
@@ -303,18 +311,11 @@ class GameBoardScene(BaseScene):
             player_name = self.active_character.name
             # start_index = self.character_positions.get(player_name, -1)
             start_index = self.client.player_states.get(player_name)["position_index"]
-            if self.move_status == "Go Back":
-                step_range = [
-                    i
-                    for i in range(start_index - 1, -1, -1)
-                    if start_index - i <= step_count
-                ]
-            else:
-                step_range = [
-                    i
-                    for i in range(start_index + 1, len(MAP_POSITIONS))
-                    if i - start_index <= step_count
-                ]
+            step_range = [
+                i
+                for i in range(start_index + 1, len(MAP_POSITIONS))
+                if i - start_index <= step_count
+            ]
 
             if step_range:
                 steps = [
@@ -334,6 +335,15 @@ class GameBoardScene(BaseScene):
                 print(self.character_positions[player_name])
                 self.character_positions[player_name] = end_index
                 self.client.player_states[player_name]["position_index"] = end_index
+
+                # Khi nhân vật đi đến cuối bản đồ
+                if end_index >= len(MAP_POSITIONS) - 1:
+                    winner = self.active_character.name
+                    print(f"[Game] {winner} reached the end!")
+
+                    # Chuyển sang màn hình Game Over, truyền tên người thắng
+                    self.client.send_game_over(winner)
+                    return
 
                 token_data = {"position": end_index, "start_index": start_index}
                 action_data = {"steps": step_count, "player": player_name}

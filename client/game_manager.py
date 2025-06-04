@@ -7,7 +7,7 @@ from scenes.home_scene import HomeScene
 from scenes.connect_scene import ConnectScene
 from scenes.waiting_room_scene import WaitingRoomScene
 from scenes.game_board_scene import GameBoardScene
-
+from scenes.game_over_scene import GameOverScene
 
 class Game:
     def __init__(self, width=1000, height=700):
@@ -48,6 +48,9 @@ class Game:
         )
         self.scene_manager.add_scene(
             "main_scene", GameBoardScene(self.scene_manager, self.websocket_client)
+        )
+        self.scene_manager.add_scene(
+            "game_over", GameOverScene(self.scene_manager, self.websocket_client)
         )
 
     def run(self):
