@@ -32,3 +32,5 @@ load_dotenv()
 
 # Lấy SERVER từ biến môi trường
 server = os.getenv("SERVER_IP", "localhost")  # fallback = localhost nếu không có
+
+

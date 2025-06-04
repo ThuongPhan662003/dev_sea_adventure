@@ -15,6 +15,7 @@ players: list[str] = []
 player_ws_map: dict[str, WebSocket] = {}
 current_turn_index: int = 0
 map_data: dict = {}
+
 current_game_id: int = 1
 player_ids: dict[str, int] = {}
 
@@ -22,8 +23,8 @@ current_turn_name: str | None = None
 token_start_time: datetime | None = None
 current_turn_ws: WebSocket | None = None
 token_timeout_task = None
-
-
+player_states: dict = {}
+start_game = False  # Biến để xác định đã bắt đầu game hay chưa
 # ==== RESET GAME STATE ====
 def reset_game_state():
     global players, player_ws_map, player_ids, current_turn_index
@@ -43,6 +44,7 @@ def reset_game_state():
         token_timeout_task.cancel()
     token_timeout_task = None
     clients.clear()
+
 
 
 # ==== HÀM XỬ LÝ ====
@@ -134,6 +136,10 @@ def remove_client(ws: WebSocket):
 
 
 async def handle_join(name: str, websocket: WebSocket):
+
+    global players, player_ws_map, clients, start_game
+    # Nếu người chơi chưa tồn tại, thêm vào danh sách
+
     if name not in players:
         players.append(name)
         player_ws_map[name] = websocket
@@ -146,18 +152,36 @@ async def handle_join(name: str, websocket: WebSocket):
     await send_to(websocket, {"type": "join_accepted", "players": players})
     await broadcast_token_ring(websocket, {"type": "waiting_room_update", "players": players})
 
+    if start_game:
+        print("Game đã bắt đầu, không gửi lại danh sách người chơi.")
+        await send_to(
+            websocket,
+            {
+                "type": "game_resync",
+                "player_states": player_states,
+                "map_data": map_data,
+            },
+        )
+
 
 async def handle_start_game(websocket: WebSocket):
-    global current_turn_name, token_start_time, current_turn_ws, map_data
+    global current_turn_name, token_start_time, current_turn_ws, players, player_ws_map, current_turn_index, map_data, start_game
+    current_turn_name = players[0]  # hoặc host_name
+    token_start_time = datetime.utcnow()
+    current_turn_ws = player_ws_map.get(current_turn_name)
+    print(f"Khởi tạo game với người chơi: {current_turn_name}{current_turn_ws}")
+
 
     if not players:
         return
-
-    current_turn_name = players[0]
-    token_start_time = datetime.utcnow()
-    current_turn_ws = player_ws_map[current_turn_name]
     map_data = create_game_map()
-
+    host_name = players[0]
+    host_ws = player_ws_map.get(host_name)
+    if not host_ws:
+        print(f"Không tìm thấy WebSocket cho host: {host_name}")
+        return
+    start_game = True
+    # Gửi theo vòng bắt đầu từ người host
     await broadcast_token_ring(
         current_turn_ws,
         {
@@ -171,7 +195,23 @@ async def handle_start_game(websocket: WebSocket):
     await start_token_timeout(current_turn_ws, current_turn_name)
 
 
-async def handle_action(name: str, data: dict, websocket: WebSocket):
+async def handle_action(
+    name: str,
+    data: dict,
+    player_states_data: dict,
+    map: dict,
+    websocket: WebSocket,
+):
+    global players, player_ws_map, current_turn_index, map_data, player_states
+    player_states = player_states_data
+    map_data = map
+    # if name != current_turn():
+    #     await send_to(
+    #         websocket, {"type": "error", "message": "Không phải lượt của bạn!"}
+    #     )
+    #     return
+
+    # Gửi thông tin cập nhật theo Token Ring
     await broadcast_token_ring(
         websocket,
         {
@@ -293,7 +333,11 @@ async def websocket_game(websocket: WebSocket):
 
             elif message["type"] == "action":
                 await handle_action(
-                    message["sender"], message["token_data"]["position"], websocket
+                    message["sender"],
+                    message["token_data"]["position"],
+                    message["player_states_data"],
+                    message["map_data"],
+                    websocket,
                 )
 
             elif message["type"] == "next_token":
