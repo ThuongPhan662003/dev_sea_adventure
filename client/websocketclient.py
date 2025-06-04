@@ -4,15 +4,14 @@ import asyncio
 import websockets
 import json
 
-from settings import PORT
-from utils.utils import get_local_ip
+from settings import PORT, server
 
 
 class WebSocketClient:
 
     def __init__(self):
 
-        self.uri = f"ws://{get_local_ip()}/ws"
+        self.uri = f"ws://{server}:{PORT}/ws"
         self.players = []
         self.player_name = None
         self.is_host = False
