@@ -173,6 +173,7 @@ async def handle_join(name: str, websocket: WebSocket):
         websocket, {"type": "waiting_room_update", "players": players}
     )
     if start_game:
+        print("Game đã bắt đầu, không gửi lại danh sách người chơi.")
         await send_to(
             websocket,
             {
@@ -184,7 +185,7 @@ async def handle_join(name: str, websocket: WebSocket):
 
 
 async def handle_start_game(websocket: WebSocket):
-    global current_turn_name, token_start_time, current_turn_ws, players, player_ws_map, current_turn_index, map_data
+    global current_turn_name, token_start_time, current_turn_ws, players, player_ws_map, current_turn_index, map_data, start_game
     current_turn_name = players[0]  # hoặc host_name
     token_start_time = datetime.utcnow()
     current_turn_ws = player_ws_map.get(current_turn_name)
@@ -218,10 +219,15 @@ async def handle_start_game(websocket: WebSocket):
 
 
 async def handle_action(
-    name: str, data: dict, player_states_data: dict, websocket: WebSocket
+    name: str,
+    data: dict,
+    player_states_data: dict,
+    map: dict,
+    websocket: WebSocket,
 ):
     global players, player_ws_map, current_turn_index, map_data, player_states
     player_states = player_states_data
+    map_data = map
     # if name != current_turn():
     #     await send_to(
     #         websocket, {"type": "error", "message": "Không phải lượt của bạn!"}

@@ -148,7 +148,6 @@ class GameBoardScene(BaseScene):
             )
             for i in range(len(self.client.players))
         ]
-
         self.player_index = self.client.players.index(self.client.player_name)
         self.active_character = self.characters[
             self.player_index % len(self.characters)
@@ -162,7 +161,17 @@ class GameBoardScene(BaseScene):
         )
 
         # Vị trí ban đầu mỗi người chơi
-        self.character_positions = {char.name: 0 for char in self.characters}
+        # self.character_positions = {char.name: 0 for char in self.characters}
+        # Cập nhật vị trí nhân vật theo player_states
+        for char in self.characters:
+            player_state = self.client.player_states.get(char.name)
+            print(f"[Client] Player state for {char.name}: {player_state}")
+            if player_state:
+                index = player_state.get("position_index", 0)
+                if 0 <= index < len(MAP_POSITIONS):
+                    pos = MAP_POSITIONS[index]
+                    char.position = [pos["x"], pos["y"] - 50]
+                    self.character_positions[char.name] = index
 
     def handle_event(self, event):
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -276,7 +285,7 @@ class GameBoardScene(BaseScene):
                 except Exception as e:
                     print("[Warning] Không đồng bộ được thời gian:", e)
                     self.countdown_time_left = 10.0
-            
+
             message = self.client.get_message_nowait()
 
         # Di chuyển nhân vật bằng phím
@@ -336,7 +345,7 @@ class GameBoardScene(BaseScene):
                 self.client.player_states[player_name]["position_index"] = end_index
 
                 token_data = {"position": end_index, "start_index": start_index}
-                action_data = self.client.player_states.get(player_name, {})
+                action_data = self.client.player_states
                 map_data = self.client.map_data
                 print("map_data", map_data)
                 self.client.send_action(token_data, action_data, map_data)
@@ -357,6 +366,40 @@ class GameBoardScene(BaseScene):
                 current_turn=self.client.token_holder,
             )
             flag = 0  # Reset flag sau khi gửi
+            # Kiểm tra và thêm nhân vật nếu có người mới
+        existing_names = {char.name for char in self.characters}
+        for i, player_name in enumerate(self.client.players):
+            if player_name not in existing_names:
+                print(
+                    f"[GameBoardScene] Phát hiện người mới: {player_name}, đang tạo nhân vật..."
+                )
+
+                char = Character(
+                    name=player_name,
+                    folder_path=self.sprite_folders[i % len(self.sprite_folders)],
+                    position=(
+                        150 + i * 100,
+                        300,
+                    ),  # vị trí tạm thời, sẽ cập nhật bên dưới
+                    sound_path=self.sound_paths[i % len(self.sound_paths)],
+                    channel_index=i,
+                    label_image_path=(
+                        "./assets/background/star.png"
+                        if player_name == self.client.player_name
+                        else None
+                    ),
+                )
+
+                # Nếu đã có vị trí trong player_states, gán luôn đúng vị trí
+                player_state = self.client.player_states.get(player_name)
+                if player_state:
+                    index = player_state.get("position_index", 0)
+                    if 0 <= index < len(MAP_POSITIONS):
+                        pos = MAP_POSITIONS[index]
+                        char.position = [pos["x"], pos["y"] - 50]
+                        self.character_positions[player_name] = index
+
+                self.characters.append(char)
 
     def draw(self, screen):
         screen.blit(self.background, (0, 0))

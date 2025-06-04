@@ -37,13 +37,12 @@ class WaitingRoomScene(BaseScene):
                 # ).start()
                 self.client.send_start_game()
                 # self.manager.set_scene("main_scene")
-            
+
     def update(self):
         # Kiểm tra xem có tin nhắn nào mới từ server không
         message = self.client.get_message_nowait()
         while message:
             # while True:
-            print(f"[WaitingRoomScene] Received message: {message}")
             if message["type"] == "start":
                 self.client.map_state = message.get("map")
                 self.client.token_holder = message.get("current_turn")
@@ -53,6 +52,12 @@ class WaitingRoomScene(BaseScene):
 
                 self.client.current_turn_index = 0
                 self.on_game_started()
+            elif message["type"] == "game_resync":
+
+                print("players:", self.client.players)
+                print("player_states:", self.client.player_states)
+
+                self.manager.set_scene("main_scene")
             message = self.client.get_message_nowait()
 
     def draw(self, screen):
