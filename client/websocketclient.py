@@ -61,7 +61,7 @@ class WebSocketClient:
 
                     # Đưa message vào queue để luồng chính xử lý
                     self.message_queue.put(data)
-
+                    print(f"[WebSocketClient] Nhận message: {data}")
                     # Nếu có callback, gọi ngay
                     if data["type"] == "join_accepted":
                         self.players = data["players"]
@@ -176,6 +176,7 @@ class WebSocketClient:
         else:
             print("[WebSocketClient] Not connected or stopped, cannot send message.")
 
+    
     def get_message_nowait(self):
         """Lấy message mới nhất từ server, không chặn luồng"""
         try:
@@ -227,3 +228,13 @@ class WebSocketClient:
                 "current_turn": current_turn,
             }
         )
+
+    # websocket_client.py
+
+    def send_game_over(self, winner: str):
+        message = {
+            "type": "game_over",
+            "winner": winner
+        }
+        self.send(message)
+

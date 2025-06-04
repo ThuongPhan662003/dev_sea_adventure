@@ -44,7 +44,7 @@ class ConnectScene(BaseScene):
                 if name:
                     print(f"Connecting with name: {name}")
 
-                    # Khởi động websocket trong luồng ngầm
+                    
                     self.client.start(name)
                     self.manager.set_scene("waiting")
             elif event.key == pygame.K_BACKSPACE:
