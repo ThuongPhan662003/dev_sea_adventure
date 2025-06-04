@@ -8,3 +8,4 @@ pygame
 pymysql
 cryptography
 python-dateutil
+jinja2

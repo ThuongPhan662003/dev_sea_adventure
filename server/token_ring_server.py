@@ -1,12 +1,15 @@
 from asyncio import create_task, sleep
 import asyncio
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse
 from database import get_session
 from models import Player
 import json
 from datetime import datetime
 from utils.utils import create_game_map
+from fastapi.templating import Jinja2Templates
 
+templates = Jinja2Templates(directory="templates")
 router = APIRouter()
 
 # ==== TRẠNG THÁI GAME ====
@@ -25,6 +28,9 @@ current_turn_ws: WebSocket | None = None
 token_timeout_task = None
 player_states: dict = {}
 start_game = False  # Biến để xác định đã bắt đầu game hay chưa
+token_ring_logs: list[str] = []
+
+
 # ==== RESET GAME STATE ====
 def reset_game_state():
     global players, player_ws_map, player_ids, current_turn_index
@@ -46,8 +52,24 @@ def reset_game_state():
     clients.clear()
 
 
+sse_clients: list[asyncio.Queue] = []
 
 # ==== HÀM XỬ LÝ ====
+# Danh sách client SSE: mỗi client là 1 asyncio.Queue để gửi dữ liệu bất đồng bộ
+
+
+async def broadcast_logs():
+    data = json.dumps(
+        {
+            "token_ring_logs": token_ring_logs,
+            "current_turn": current_turn_name,
+            "players": players,
+        }
+    )
+    for queue in sse_clients:
+        await queue.put(data)
+
+
 async def send_to_next_player_from_to(websocket_from: WebSocket, message: dict):
     sender_name = get_player_name_by_ws(websocket_from)
     if sender_name is None or sender_name not in players:
@@ -69,6 +91,11 @@ async def send_to_next_player_from_to(websocket_from: WebSocket, message: dict):
                 clients.remove(websocket_to)
             player_ws_map.pop(next_player, None)
             players.remove(next_player)
+    # token_ring_logs.append(
+    #     f"{datetime.utcnow().isoformat()} - Token moved to {next_player}"
+    # )
+    # **Gửi log mới cho các client SSE**
+    await broadcast_logs()
 
 
 def get_player_name_by_ws(ws: WebSocket):
@@ -87,7 +114,9 @@ async def broadcast_token_ring(websocket_from: WebSocket, message: dict):
     current_ws = websocket_from
 
     for _ in range(len(players)):
+
         await send_to_next_player_from_to(current_ws, message)
+
         next_index = (players.index(current_name) + 1) % len(players)
         current_name = players[next_index]
         current_ws = player_ws_map[current_name]
@@ -150,7 +179,9 @@ async def handle_join(name: str, websocket: WebSocket):
             session.commit()
 
     await send_to(websocket, {"type": "join_accepted", "players": players})
-    await broadcast_token_ring(websocket, {"type": "waiting_room_update", "players": players})
+    await broadcast_token_ring(
+        websocket, {"type": "waiting_room_update", "players": players}
+    )
 
     if start_game:
         print("Game đã bắt đầu, không gửi lại danh sách người chơi.")
@@ -170,7 +201,6 @@ async def handle_start_game(websocket: WebSocket):
     token_start_time = datetime.utcnow()
     current_turn_ws = player_ws_map.get(current_turn_name)
     print(f"Khởi tạo game với người chơi: {current_turn_name}{current_turn_ws}")
-
 
     if not players:
         return
@@ -205,11 +235,7 @@ async def handle_action(
     global players, player_ws_map, current_turn_index, map_data, player_states
     player_states = player_states_data
     map_data = map
-    # if name != current_turn():
-    #     await send_to(
-    #         websocket, {"type": "error", "message": "Không phải lượt của bạn!"}
-    #     )
-    #     return
+    # Kiểm tra xem người gửi có phải đang giữ token không
 
     # Gửi thông tin cập nhật theo Token Ring
     await broadcast_token_ring(
@@ -232,6 +258,11 @@ async def handle_next_token(websocket: WebSocket, message: dict):
         print(f"Không tìm thấy WebSocket cho {next_player}")
         return
 
+    token_ring_logs.clear()  # clear log token ring
+
+    token_ring_logs.append(
+        f"{datetime.utcnow().isoformat()} - Token moved to {next_player}"
+    )
     await broadcast_token_ring(
         next_ws,
         {
@@ -246,6 +277,10 @@ async def handle_next_token(websocket: WebSocket, message: dict):
     token_start_time = datetime.utcnow()
     current_turn_ws = next_ws
     await start_token_timeout(current_turn_ws, current_turn_name)
+    token_ring_logs.append(
+        f"{datetime.utcnow().isoformat()} - Token moved to {next_player}"
+    )
+
 
 async def handle_game_over(websocket: WebSocket, message: dict):
     global token_timeout_task
@@ -279,11 +314,11 @@ async def handle_game_over(websocket: WebSocket, message: dict):
     # Hủy task timeout nếu còn
     if token_timeout_task and not token_timeout_task.done():
         token_timeout_task.cancel()
-
+    global start_game
+    start_game = False
     # # Reset tất cả state
     # reset_game_state()
     # print("✅ Trò chơi kết thúc. Server đã reset.")
-
 
 
 def get_token_elapsed_seconds():
@@ -311,6 +346,7 @@ async def start_token_timeout(ws: WebSocket, player_name: str):
 
 
 # ==== ENDPOINT WEBSOCKET ====
+
 
 @router.websocket("/ws")
 async def websocket_game(websocket: WebSocket):
@@ -354,3 +390,38 @@ async def websocket_game(websocket: WebSocket):
         await broadcast_token_ring(
             websocket, {"type": "player_disconnected", "players": players}
         )
+
+
+from fastapi.responses import StreamingResponse
+
+
+@router.get("/token-log-stream")
+async def token_log_stream():
+    async def event_generator():
+        queue = asyncio.Queue()
+        sse_clients.append(queue)
+        try:
+            # Gửi trạng thái hiện tại ngay khi client kết nối
+            await queue.put(
+                json.dumps(
+                    {
+                        "token_ring_logs": token_ring_logs,
+                        "current_turn": current_turn_name,
+                        "players": players,
+                    }
+                )
+            )
+            while True:
+                data = await queue.get()
+                yield f"data: {data}\n\n"
+        except asyncio.CancelledError:
+            pass
+        finally:
+            sse_clients.remove(queue)
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+@router.get("/token-log", response_class=HTMLResponse)
+async def token_log_page(request: Request):
+    return templates.TemplateResponse("token_log.html", {"request": request})

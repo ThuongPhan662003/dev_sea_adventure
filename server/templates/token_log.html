@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Token Ring Logs</title>
+    <style>
+        body {
+            background: #121212;
+            color: #eee;
+            font-family: monospace;
+            padding: 1rem;
+        }
+
+        #logs {
+            max-height: 400px;
+            overflow-y: auto;
+            background: #222;
+            padding: 1rem;
+            border-radius: 6px;
+        }
+
+        #currentTurn {
+            font-weight: bold;
+            color: #4caf50;
+        }
+    </style>
+</head>
+
+<body>
+    <h2>Token Ring Logs</h2>
+    <p>Current turn: <span id="currentTurn">-</span></p>
+    <p>Players: <span id="playersList">-</span></p>
+    <div id="logs"></div>
+
+    <script>
+        const logsEl = document.getElementById('logs');
+        const currentTurnEl = document.getElementById('currentTurn');
+        const playersListEl = document.getElementById('playersList');
+
+        const evtSource = new EventSource('/token-log-stream');
+
+        evtSource.onmessage = e => {
+            const data = JSON.parse(e.data);
+            currentTurnEl.textContent = data.current_turn || '-';
+            playersListEl.textContent = (data.players || []).join(', ') || '-';
+
+            logsEl.innerHTML = '';
+            (data.token_ring_logs || []).forEach(log => {
+                const p = document.createElement('p');
+                p.textContent = log;
+                logsEl.appendChild(p);
+            });
+            logsEl.scrollTop = logsEl.scrollHeight; // scroll xuống dưới cùng
+        };
+
+        evtSource.onerror = e => {
+            console.error('SSE connection error', e);
+            evtSource.close();
+            setTimeout(() => window.location.reload(), 3000); // Thử kết nối lại
+        };
+    </script>
+</body>
+
+</html>
