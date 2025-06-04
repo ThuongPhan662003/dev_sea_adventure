@@ -29,13 +29,14 @@ token_timeout_task = None
 player_states: dict = {}
 start_game = False  # Biến để xác định đã bắt đầu game hay chưa
 token_ring_logs: list[str] = []
+heartbeat_status: dict[str, str] = {}  # player_name -> "✅ Alive" hoặc "💀 Lost"
 
 
 # ==== RESET GAME STATE ====
 def reset_game_state():
     global players, player_ws_map, player_ids, current_turn_index
     global map_data, current_turn_name, token_start_time, current_turn_ws
-    global token_timeout_task, clients
+    global token_timeout_task, clients, start_game, player_states, token_ring_logs, heartbeat_status
 
     print("✅ Đang reset toàn bộ trạng thái server...")
     players.clear()
@@ -49,7 +50,11 @@ def reset_game_state():
     if token_timeout_task and not token_timeout_task.done():
         token_timeout_task.cancel()
     token_timeout_task = None
+    start_game = False
     clients.clear()
+    player_states.clear()
+    token_ring_logs.clear()
+    heartbeat_status.clear()
 
 
 sse_clients: list[asyncio.Queue] = []
@@ -162,6 +167,7 @@ def remove_client(ws: WebSocket):
     if not clients:
         print("⚠️ Không còn người chơi nào. Reset server state.")
         reset_game_state()
+        print("players:", clients)
 
 
 async def handle_join(name: str, websocket: WebSocket):
@@ -260,9 +266,9 @@ async def handle_next_token(websocket: WebSocket, message: dict):
 
     token_ring_logs.clear()  # clear log token ring
 
-    token_ring_logs.append(
-        f"{datetime.utcnow().isoformat()} - Token moved to {next_player}"
-    )
+    # token_ring_logs.append(
+    #     f"{datetime.utcnow().isoformat()} - Token moved to {next_player}"
+    # )
     await broadcast_token_ring(
         next_ws,
         {
@@ -338,11 +344,27 @@ async def start_token_timeout(ws: WebSocket, player_name: str):
         token_timeout_task.cancel()
 
     async def timeout_handler():
-        await sleep(10)
-        print(f"[TIMEOUT] {player_name} đã giữ token quá 10s.")
+        await sleep(20)
+        print(f"[TIMEOUT] {player_name} đã giữ token quá 20s.")
         await handle_next_token(ws, {"type": "auto_next_due_to_timeout"})
 
     token_timeout_task = create_task(timeout_handler())
+
+
+async def heartbeat_checker():
+    while True:
+        for ws in list(clients):
+            player_name = get_player_name_by_ws(ws)
+            try:
+                await ws.send_text(json.dumps({"type": "heartbeat"}))
+                if player_name:
+                    heartbeat_status[player_name] = "✅ Alive"
+            except Exception:
+                print(f"💀 Mất kết nối với: {player_name}")
+                if player_name:
+                    heartbeat_status[player_name] = "💀 Lost"
+                remove_client(ws)
+        await asyncio.sleep(5)
 
 
 # ==== ENDPOINT WEBSOCKET ====
@@ -381,6 +403,11 @@ async def websocket_game(websocket: WebSocket):
 
             elif message["type"] == "game_over":
                 await handle_game_over(websocket, message)
+            elif message["type"] == "heartbeat_response":
+                print("Received heartbeat response from client.")
+                player_name = get_player_name_by_ws(websocket)
+                if player_name:
+                    heartbeat_status[player_name] = "✅ Alive"
 
     except asyncio.TimeoutError:
         pass
@@ -395,25 +422,35 @@ async def websocket_game(websocket: WebSocket):
 from fastapi.responses import StreamingResponse
 
 
+def get_token_elapsed_seconds():
+    if token_start_time:
+        return int((datetime.utcnow() - token_start_time).total_seconds())
+    return 0
+
+
 @router.get("/token-log-stream")
 async def token_log_stream():
     async def event_generator():
         queue = asyncio.Queue()
         sse_clients.append(queue)
         try:
-            # Gửi trạng thái hiện tại ngay khi client kết nối
-            await queue.put(
-                json.dumps(
+            while True:
+                elapsed = get_token_elapsed_seconds()
+                remaining = max(0, 20 - elapsed)  # bạn đang đặt timeout là 20 giây
+
+                data = json.dumps(
                     {
                         "token_ring_logs": token_ring_logs,
                         "current_turn": current_turn_name,
                         "players": players,
+                        "time_remaining": remaining,
+                        "heartbeat_status": heartbeat_status,
                     }
                 )
-            )
-            while True:
-                data = await queue.get()
-                yield f"data: {data}\n\n"
+
+                await queue.put(data)
+                yield f"data: {await queue.get()}\n\n"
+                await asyncio.sleep(1)  # cập nhật mỗi giây
         except asyncio.CancelledError:
             pass
         finally:
@@ -425,3 +462,8 @@ async def token_log_stream():
 @router.get("/token-log", response_class=HTMLResponse)
 async def token_log_page(request: Request):
     return templates.TemplateResponse("token_log.html", {"request": request})
+
+
+@router.on_event("startup")
+async def start_heartbeat():
+    create_task(heartbeat_checker())

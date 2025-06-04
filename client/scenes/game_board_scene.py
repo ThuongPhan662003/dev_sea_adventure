@@ -10,6 +10,7 @@ from .components.dice import Dice
 from .components.button import Button
 from .game_over_scene import GameOverScene
 import asyncio
+import time
 
 
 class GameBoardScene(BaseScene):
@@ -79,7 +80,7 @@ class GameBoardScene(BaseScene):
         self.buttons = []
 
         # Đồng hồ đếm ngược
-        self.countdown_total = 6.0  # Tổng thời gian đếm ngược (giây)
+        self.countdown_total = 10.0  # Tổng thời gian đếm ngược (giây)
         self.countdown_time_left = self.countdown_total
         self.countdown_active = False
 
@@ -216,7 +217,7 @@ class GameBoardScene(BaseScene):
         ):
             self.countdown_time_left -= dt
             if self.countdown_time_left <= 0:
-                self.countdown_time_left = self.countdown_total
+                # self.countdown_time_left = 0
                 # self.countdown_active = False
                 print("[Timer] Time's up!")
                 # TODO: Hành động khi hết thời gian, ví dụ kết thúc lượt
@@ -282,11 +283,12 @@ class GameBoardScene(BaseScene):
                     server_time = isoparse(message.get("start_time"))
                     now = datetime.utcnow()
                     delay = (now - server_time).total_seconds()
-                    self.countdown_time_left = max(6.0 - delay, 6.0)
+                    # self.countdown_time_left = max(self.countdown_total - delay, 6.0)
+                    self.countdown_time_left = self.countdown_total
                 except Exception as e:
                     print("[Warning] Không đồng bộ được thời gian:", e)
                     self.countdown_time_left = 10.0
-            
+
             elif message["type"] == "end_game":
                 winner = message.get("winner")
                 print(f"[Client] Game Over! Winner: {winner}")
@@ -349,7 +351,7 @@ class GameBoardScene(BaseScene):
                 if end_index >= len(MAP_POSITIONS) - 1:
                     winner = self.active_character.name
                     print(f"[Game] {winner} reached the end!")
-
+                    time.sleep(5)  # Đợi 1 giây trước khi
                     # Chuyển sang màn hình Game Over, truyền tên người thắng
                     self.client.send_game_over(winner)
                     return
@@ -439,7 +441,7 @@ class GameBoardScene(BaseScene):
             your_name = self.client.player_name
             token = self.client.token_holder
             if token == your_name:
-                your_turn_text = "Your's turn"
+                your_turn_text = "Your turn"
                 text_color = (0, 255, 0)  # Màu xanh lá cây cho lượt của bạn
             else:
                 your_turn_text = f"{token}'s turn"
@@ -497,11 +499,11 @@ class GameBoardScene(BaseScene):
             button_width + 40,
             (button_height + padding) * 2 + 40,
         )
-        pygame.draw.rect(screen, (30, 30, 30), panel_rect, border_radius=15)
+        # pygame.draw.rect(screen, (30, 30, 30), panel_rect, border_radius=15)
 
         # Vẽ nút
-        for button in self.buttons:
-            button.draw(screen)
+        # for button in self.buttons:
+        #     button.draw(screen)
 
         # pygame.draw.rect(screen, (0, 128, 0), self.button_rect)
         # button_label = self.font.render("Start Walk", True, (255, 255, 255))

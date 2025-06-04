@@ -157,6 +157,8 @@ class WebSocketClient:
                                 "type": "game_resync",
                             }
                         )
+                    elif data["type"] == "heartbeat":
+                        self.send({"type": "heartbeat_response"})
                     print("[WebSocketClient] Nhận message:", data)
         except websockets.exceptions.ConnectionClosed as e:
             print(
@@ -176,7 +178,6 @@ class WebSocketClient:
         else:
             print("[WebSocketClient] Not connected or stopped, cannot send message.")
 
-    
     def get_message_nowait(self):
         """Lấy message mới nhất từ server, không chặn luồng"""
         try:
@@ -232,9 +233,5 @@ class WebSocketClient:
     # websocket_client.py
 
     def send_game_over(self, winner: str):
-        message = {
-            "type": "game_over",
-            "winner": winner
-        }
+        message = {"type": "game_over", "winner": winner}
         self.send(message)
-
