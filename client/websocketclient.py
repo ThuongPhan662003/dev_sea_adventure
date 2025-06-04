@@ -140,6 +140,17 @@ class WebSocketClient:
                             "[WebSocketClient] Token holder updated:",
                             self.token_holder,
                         )
+
+                    elif data["type"] == "game_resync":
+                        # Đồng bộ lại trạng thái game
+                        self.map_state = data.get("map_data", [])
+                        self.player_states = data.get("player_states", {})
+                        print("[WebSocketClient] Game resynced:", data)
+                        self.message_queue.put(
+                            {
+                                "type": "game_resync",
+                            }
+                        )
                     print("[WebSocketClient] Nhận message:", data)
         except websockets.exceptions.ConnectionClosed as e:
             print(
@@ -187,7 +198,8 @@ class WebSocketClient:
                 "type": "action",
                 "sender": self.player_name,
                 "token_data": token_data,
-                "data": action_data,
+                "player_states_data": action_data,
+                "map_data": self.client.map_data,
             }
         )
 

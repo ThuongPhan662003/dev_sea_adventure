@@ -53,7 +53,14 @@ class ConnectScene(BaseScene):
                 self.input_text += event.unicode
 
     def update(self):
-        pass
+        # Kiểm tra xem có tin nhắn nào mới từ server không
+        message = self.client.get_message_nowait()
+        while message:
+            # while True:
+            print(f"[WaitingRoomScene] Received message: {message}")
+            if message["type"] == "game_resync":
+                self.manager.set_scene("main_scene")
+            message = self.client.get_message_nowait()
 
     def draw(self, screen):
         # Vẽ background trước

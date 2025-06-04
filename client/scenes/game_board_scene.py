@@ -276,7 +276,7 @@ class GameBoardScene(BaseScene):
                 except Exception as e:
                     print("[Warning] Không đồng bộ được thời gian:", e)
                     self.countdown_time_left = 10.0
-
+            
             message = self.client.get_message_nowait()
 
         # Di chuyển nhân vật bằng phím
@@ -336,8 +336,10 @@ class GameBoardScene(BaseScene):
                 self.client.player_states[player_name]["position_index"] = end_index
 
                 token_data = {"position": end_index, "start_index": start_index}
-                action_data = {"steps": step_count, "player": player_name}
-                self.client.send_action(token_data, action_data)
+                action_data = self.client.player_states.get(player_name, {})
+                map_data = self.client.map_data
+                print("map_data", map_data)
+                self.client.send_action(token_data, action_data, map_data)
                 self.active_character.play_sound_if_moved()
 
             self.dice.final_value = 0
@@ -363,7 +365,8 @@ class GameBoardScene(BaseScene):
             f"Status: {self.move_status}", True, (255, 255, 255)
         )
         screen.blit(move_text_surface, (20, 20))
-
+        button_label = self.font.render("It's not your turn", True, (255, 255, 255))
+        #     screen.blit(button_label, (100, 500))
         # Vẽ các tile đá
         for tile in self.rock_tiles:
             tile.draw(screen)
@@ -452,6 +455,6 @@ class GameBoardScene(BaseScene):
         # screen.blit(button_label, (self.button_rect.x + 20, self.button_rect.y + 10))
 
         self.dice.draw(screen)
-        if self.client.token_holder != self.client.player_name:
-            button_label = self.font.render("It's not your turn", True, (255, 255, 255))
-            screen.blit(button_label, (100, 500))
+        # if self.client.token_holder != self.client.player_name:
+        #     button_label = self.font.render("It's not your turn", True, (255, 255, 255))
+        #     screen.blit(button_label, (100, 500))

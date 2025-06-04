@@ -29,15 +29,15 @@ class WaitingRoomScene(BaseScene):
         self.manager.set_scene("main_scene")
 
     def handle_event(self, event):
-        if event.type == pygame.MOUSEBUTTONDOWN and self.client.is_host:
-            if self.start_button.collidepoint(event.pos):
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            if self.client.is_host and self.start_button.collidepoint(event.pos):
                 # threading.Thread(
                 #     target=lambda: asyncio.run(self.client.send_start_game()),
                 #     daemon=True,
                 # ).start()
                 self.client.send_start_game()
                 # self.manager.set_scene("main_scene")
-
+            
     def update(self):
         # Kiểm tra xem có tin nhắn nào mới từ server không
         message = self.client.get_message_nowait()
