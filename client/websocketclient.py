@@ -125,6 +125,15 @@ class WebSocketClient:
                     elif data["type"] == "next_token_oke":
                         # Nếu là lượt của người chơi này, có thể thực hiện hành động
                         # self.send_dice(1)  # Gửi giá trị dice mặc định là 0
+                        # Cập nhật danh sách người chơi hiện tại
+                        # current_players = data.get("players", [])
+
+                        # # 🧹 Xóa player không còn trong danh sách khỏi player_states
+                        # self.player_states = {
+                        #     name: state
+                        #     for name, state in self.player_states.items()
+                        #     if name in current_players
+                        # }
                         print("data", data)
                         self.message_queue.put(
                             {
@@ -159,7 +168,8 @@ class WebSocketClient:
                         )
                     elif data["type"] == "heartbeat":
                         self.send({"type": "heartbeat_response"})
-                    print("[WebSocketClient] Nhận message:", data)
+                    # elif data["type"] == "player_state_update":
+
         except websockets.exceptions.ConnectionClosed as e:
             print(
                 f"[WebSocketClient] ❌ Kết nối bị đóng. Code: {e.code}, reason: {e.reason}"

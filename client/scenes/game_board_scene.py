@@ -139,7 +139,10 @@ class GameBoardScene(BaseScene):
             Character(
                 name=self.client.players[i],
                 folder_path=self.sprite_folders[i % len(self.sprite_folders)],
-                position=(150 + i * 100, 300),
+                position=(
+                    MAP_POSITIONS[0]["x"],
+                    MAP_POSITIONS[0]["y"] - 50,
+                ),
                 sound_path=self.sound_paths[i % len(self.sound_paths)],
                 channel_index=i,
                 label_image_path=(
@@ -295,7 +298,20 @@ class GameBoardScene(BaseScene):
                 self.manager.set_scene("game_over")
                 self.manager.active_scene.winner_name = winner
                 return
+            elif message["type"] == "player_state_update":
+                player_states = {
+                    name: state
+                    for name, state in self.client.player_states.items()
+                    if name in self.client.players
+                }
 
+                self.client.player_states = player_states
+
+                self.characters = [
+                    char for char in self.characters if char.name in self.client.players
+                ]
+
+                print(f"[Client] Player states updated: {self.client.player_states}")
             message = self.client.get_message_nowait()
 
         # Di chuyển nhân vật bằng phím
@@ -390,8 +406,8 @@ class GameBoardScene(BaseScene):
                     name=player_name,
                     folder_path=self.sprite_folders[i % len(self.sprite_folders)],
                     position=(
-                        150 + i * 100,
-                        300,
+                        MAP_POSITIONS[0]["x"],
+                        MAP_POSITIONS[0]["y"] - 50,
                     ),  # vị trí tạm thời, sẽ cập nhật bên dưới
                     sound_path=self.sound_paths[i % len(self.sound_paths)],
                     channel_index=i,

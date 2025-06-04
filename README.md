@@ -52,7 +52,7 @@ pip install -r requirements.txt
 
 ```bash
 cd server
-uvicorn main:app --reload --host 0.0.0.0 --port 5000
+uvicorn main:app --reload --host 0.0.0.0 --port 5001
 ```
 
 > 🔧 Server sẽ chạy tại: `ws://localhost:5000/ws`
