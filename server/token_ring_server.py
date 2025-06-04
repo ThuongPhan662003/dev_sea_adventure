@@ -155,6 +155,7 @@ def advance_turn():
 
 
 def remove_client(ws: WebSocket):
+    global players, player_ws_map, player_ids, heartbeat_status
     if ws in clients:
         clients.remove(ws)
     for name, sock in list(player_ws_map.items()):
@@ -162,6 +163,8 @@ def remove_client(ws: WebSocket):
             players.remove(name)
             player_ws_map.pop(name, None)
             player_ids.pop(name, None)
+            heartbeat_status.pop(name, None)
+
             break
 
     if not clients:
@@ -408,6 +411,7 @@ async def websocket_game(websocket: WebSocket):
                 player_name = get_player_name_by_ws(websocket)
                 if player_name:
                     heartbeat_status[player_name] = "✅ Alive"
+                await update_player_states(websocket)
 
     except asyncio.TimeoutError:
         pass
@@ -467,3 +471,15 @@ async def token_log_page(request: Request):
 @router.on_event("startup")
 async def start_heartbeat():
     create_task(heartbeat_checker())
+
+
+async def update_player_states(ws: WebSocket):
+    global players
+    # Gửi cập nhật mới cho tất cả client còn kết nối
+    await broadcast_token_ring(
+        ws,
+        {
+            "type": "player_state_update",
+            "players": players,
+        },
+    )
