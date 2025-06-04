@@ -44,7 +44,9 @@ class ConnectScene(BaseScene):
                 if name:
                     print(f"Connecting with name: {name}")
 
-                    
+                    print(
+                        f"[ConnectScene] Starting client with name: {name},{self.client.players}"
+                    )
                     self.client.start(name)
                     self.manager.set_scene("waiting")
             elif event.key == pygame.K_BACKSPACE:

@@ -2,6 +2,7 @@ import queue
 import pygame
 from .base_scene import BaseScene
 
+
 class GameOverScene(BaseScene):
     def __init__(self, manager, websocket_client, winner_name=None):
         super().__init__()
@@ -25,17 +26,22 @@ class GameOverScene(BaseScene):
                 # Quay lại màn hình chính (home)
                 import sys
                 import os
-                sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-                from websocketclient import WebSocketClient
 
-                # Khởi tạo lại WebSocketClient mới
-                self.client = WebSocketClient()
-                self.manager.client = self.client  # nếu manager dùng client chung
+                # sys.path.append(
+                #     os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+                # )
 
-                # Reset cờ
+                # from websocketclient import WebSocketClient
+                self.client.player_name = None
+                self.client.player_states = {}
+                self.client.map_data = None
+                self.client.map_state = []
+                self.client.players = []
                 self.is_host = False
                 self.current_turn_index = 0
                 self.current_position_index = 0
+                # self.client.start("")
+                
                 self.manager.set_scene("home")
 
     def update(self):

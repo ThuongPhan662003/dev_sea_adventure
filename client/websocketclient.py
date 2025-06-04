@@ -39,6 +39,19 @@ class WebSocketClient:
         self.running = True
         threading.Thread(target=self._start_loop, daemon=True).start()
 
+    def start(self, name):
+        """Bắt đầu kết nối websocket trên luồng phụ"""
+        self.player_name = name
+
+        if self.running:
+            print("[WebSocketClient] Đang chạy, dừng lại trước khi khởi tạo lại")
+            self.stop()  # <-- Quan trọng: dừng websocket + stop loop
+
+            self.loop = asyncio.new_event_loop()  # Tạo event loop mới
+
+        self.running = True
+        threading.Thread(target=self._start_loop, daemon=True).start()
+
     def _start_loop(self):
         asyncio.set_event_loop(self.loop)
         self.loop.run_until_complete(self._connect_and_listen())
@@ -176,7 +189,6 @@ class WebSocketClient:
         else:
             print("[WebSocketClient] Not connected or stopped, cannot send message.")
 
-    
     def get_message_nowait(self):
         """Lấy message mới nhất từ server, không chặn luồng"""
         try:
@@ -184,10 +196,21 @@ class WebSocketClient:
         except queue.Empty:
             return None
 
+    # def stop(self):
+    #     """Dừng kết nối và event loop"""
+    #     self.running = False
+    #     self.loop.call_soon_threadsafe(self.loop.stop)
+
     def stop(self):
-        """Dừng kết nối và event loop"""
         self.running = False
-        self.loop.call_soon_threadsafe(self.loop.stop)
+        if self.websocket:
+            try:
+                asyncio.run_coroutine_threadsafe(self.websocket.close(), self.loop)
+            except Exception as e:
+                print("[WebSocketClient] Lỗi khi đóng websocket:", e)
+
+        if self.loop.is_running():
+            self.loop.call_soon_threadsafe(self.loop.stop)
 
     # Optional: Hàm gửi start game (có thể gọi từ luồng chính)
     def send_start_game(self):
@@ -232,9 +255,5 @@ class WebSocketClient:
     # websocket_client.py
 
     def send_game_over(self, winner: str):
-        message = {
-            "type": "game_over",
-            "winner": winner
-        }
+        message = {"type": "game_over", "winner": winner}
         self.send(message)
-

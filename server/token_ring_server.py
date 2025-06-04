@@ -25,6 +25,8 @@ current_turn_ws: WebSocket | None = None
 token_timeout_task = None
 player_states: dict = {}
 start_game = False  # Biến để xác định đã bắt đầu game hay chưa
+
+
 # ==== RESET GAME STATE ====
 def reset_game_state():
     global players, player_ws_map, player_ids, current_turn_index
@@ -44,7 +46,6 @@ def reset_game_state():
         token_timeout_task.cancel()
     token_timeout_task = None
     clients.clear()
-
 
 
 # ==== HÀM XỬ LÝ ====
@@ -130,8 +131,8 @@ def remove_client(ws: WebSocket):
             player_ids.pop(name, None)
             break
 
-    if not clients:
-        print("⚠️ Không còn người chơi nào. Reset server state.")
+        # if not clients:
+        #     print("⚠️ Không còn người chơi nào. Reset server state.")
         reset_game_state()
 
 
@@ -150,7 +151,9 @@ async def handle_join(name: str, websocket: WebSocket):
             session.commit()
 
     await send_to(websocket, {"type": "join_accepted", "players": players})
-    await broadcast_token_ring(websocket, {"type": "waiting_room_update", "players": players})
+    await broadcast_token_ring(
+        websocket, {"type": "waiting_room_update", "players": players}
+    )
 
     if start_game:
         print("Game đã bắt đầu, không gửi lại danh sách người chơi.")
@@ -170,7 +173,6 @@ async def handle_start_game(websocket: WebSocket):
     token_start_time = datetime.utcnow()
     current_turn_ws = player_ws_map.get(current_turn_name)
     print(f"Khởi tạo game với người chơi: {current_turn_name}{current_turn_ws}")
-
 
     if not players:
         return
@@ -247,6 +249,7 @@ async def handle_next_token(websocket: WebSocket, message: dict):
     current_turn_ws = next_ws
     await start_token_timeout(current_turn_ws, current_turn_name)
 
+
 async def handle_game_over(websocket: WebSocket, message: dict):
     global token_timeout_task
 
@@ -271,19 +274,19 @@ async def handle_game_over(websocket: WebSocket, message: dict):
     # Xóa từng client bằng remove_client
     for ws in list(clients):  # copy để tránh thay đổi trong khi lặp
         remove_client(ws)
-        # try:
-        #     await ws.close()
-        # except:
-        #     pass  # trong trường hợp client đã tự ngắt
+    # try:
+    #     await ws.close()
+    # except:
+    #     pass  # trong trường hợp client đã tự ngắt
 
     # Hủy task timeout nếu còn
     if token_timeout_task and not token_timeout_task.done():
         token_timeout_task.cancel()
-
+    global start_game
+    start_game = False
     # # Reset tất cả state
     # reset_game_state()
     # print("✅ Trò chơi kết thúc. Server đã reset.")
-
 
 
 def get_token_elapsed_seconds():
@@ -311,6 +314,7 @@ async def start_token_timeout(ws: WebSocket, player_name: str):
 
 
 # ==== ENDPOINT WEBSOCKET ====
+
 
 @router.websocket("/ws")
 async def websocket_game(websocket: WebSocket):
@@ -347,6 +351,7 @@ async def websocket_game(websocket: WebSocket):
                 await handle_game_over(websocket, message)
 
     except asyncio.TimeoutError:
+        remove_client(websocket)
         pass
     except WebSocketDisconnect:
         print("Client disconnected.")

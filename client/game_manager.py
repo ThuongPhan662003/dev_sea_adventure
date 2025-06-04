@@ -9,6 +9,7 @@ from scenes.waiting_room_scene import WaitingRoomScene
 from scenes.game_board_scene import GameBoardScene
 from scenes.game_over_scene import GameOverScene
 
+
 class Game:
     def __init__(self, width=1000, height=700):
         pygame.init()

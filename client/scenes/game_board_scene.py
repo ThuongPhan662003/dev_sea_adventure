@@ -286,7 +286,7 @@ class GameBoardScene(BaseScene):
                 except Exception as e:
                     print("[Warning] Không đồng bộ được thời gian:", e)
                     self.countdown_time_left = 10.0
-            
+
             elif message["type"] == "end_game":
                 winner = message.get("winner")
                 print(f"[Client] Game Over! Winner: {winner}")
@@ -352,7 +352,7 @@ class GameBoardScene(BaseScene):
 
                     # Chuyển sang màn hình Game Over, truyền tên người thắng
                     self.client.send_game_over(winner)
-                    return
+                    # return
 
                 token_data = {"position": end_index, "start_index": start_index}
                 action_data = self.client.player_states
