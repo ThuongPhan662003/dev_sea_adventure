@@ -186,7 +186,9 @@ async def handle_join(name: str, websocket: WebSocket):
         with get_session() as session:
             session.add(Player(player_name=name))
             session.commit()
-
+        token_ring_logs.append(
+            f"{datetime.utcnow().isoformat()} - 👤 Player '{name}' joined the game"
+        )
     await send_to(websocket, {"type": "join_accepted", "players": players})
     await broadcast_token_ring(
         websocket, {"type": "waiting_room_update", "players": players}
@@ -201,6 +203,9 @@ async def handle_join(name: str, websocket: WebSocket):
                 "player_states": player_states,
                 "map_data": map_data,
             },
+        )
+        token_ring_logs.append(
+            f"{datetime.utcnow().isoformat()} - 👤 Player '{name}' joined the game when game started"
         )
 
 
@@ -220,6 +225,9 @@ async def handle_start_game(websocket: WebSocket):
         print(f"Không tìm thấy WebSocket cho host: {host_name}")
         return
     start_game = True
+    token_ring_logs.append(
+        f"{datetime.utcnow().isoformat()} - 🎮 Game started by '{current_turn_name}'"
+    )
     # Gửi theo vòng bắt đầu từ người host
     await broadcast_token_ring(
         current_turn_ws,
@@ -269,9 +277,9 @@ async def handle_next_token(websocket: WebSocket, message: dict):
 
     token_ring_logs.clear()  # clear log token ring
 
-    # token_ring_logs.append(
-    #     f"{datetime.utcnow().isoformat()} - Token moved to {next_player}"
-    # )
+    token_ring_logs.append(
+        f"{datetime.utcnow().isoformat()} - Token moved to {next_player}"
+    )
     await broadcast_token_ring(
         next_ws,
         {
@@ -286,9 +294,6 @@ async def handle_next_token(websocket: WebSocket, message: dict):
     token_start_time = datetime.utcnow()
     current_turn_ws = next_ws
     await start_token_timeout(current_turn_ws, current_turn_name)
-    token_ring_logs.append(
-        f"{datetime.utcnow().isoformat()} - Token moved to {next_player}"
-    )
 
 
 async def handle_game_over(websocket: WebSocket, message: dict):
@@ -349,6 +354,9 @@ async def start_token_timeout(ws: WebSocket, player_name: str):
     async def timeout_handler():
         await sleep(20)
         print(f"[TIMEOUT] {player_name} đã giữ token quá 20s.")
+        token_ring_logs.append(
+            f"{datetime.utcnow().isoformat()} - {player_name} giữ token quá 20 giây, chuyển token tự động."
+        )
         await handle_next_token(ws, {"type": "auto_next_due_to_timeout"})
 
     token_timeout_task = create_task(timeout_handler())
@@ -362,10 +370,16 @@ async def heartbeat_checker():
                 await ws.send_text(json.dumps({"type": "heartbeat"}))
                 if player_name:
                     heartbeat_status[player_name] = "✅ Alive"
+                    token_ring_logs.append(
+                        f"🫀 Server received heartbeat from {player_name}"
+                    )
             except Exception:
                 print(f"💀 Mất kết nối với: {player_name}")
                 if player_name:
                     heartbeat_status[player_name] = "💀 Lost"
+                    token_ring_logs.append(
+                        f"💀 Mất kết nối với {player_name} (removed)"
+                    )
                 remove_client(ws)
         await asyncio.sleep(5)
 

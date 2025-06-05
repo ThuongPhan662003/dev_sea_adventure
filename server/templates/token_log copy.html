@@ -28,23 +28,14 @@
 </head>
 
 <body>
-    <div style="display: flex; gap: 2rem;">
-        <div>
-            <h3>🎯 Current Turn</h3>
-            <p id="currentTurn">-</p>
+    <h2>Token Ring Logs</h2>
+    <p>Current turn: <span id="currentTurn">-</span></p>
+    <!-- <p>Time left: <span id="countdown">-</span> seconds</p> -->
+    <h3>Heartbeat Status</h3>
+    <ul id="heartbeatStatus"></ul>
 
-            <h3>🧑‍🤝‍🧑 Players</h3>
-            <ul id="playersList"></ul>
-
-            <h3>💓 Heartbeat Status</h3>
-            <ul id="heartbeatStatus"></ul>
-        </div>
-
-        <div style="flex-grow: 1;">
-            <h3>📝 Logs</h3>
-            <div id="logs"></div>
-        </div>
-    </div>
+    <p>Players: <span id="playersList">-</span></p>
+    <div id="logs"></div>
 
     <script>
         const logsEl = document.getElementById('logs');
@@ -59,40 +50,19 @@
 
         evtSource.onmessage = e => {
             const data = JSON.parse(e.data);
-
-            // 1. Current turn
             currentTurnEl.textContent = data.current_turn || '-';
+            playersListEl.textContent = (data.players || []).join(', ') || '-';
+            countdown = data.time_remaining || 0;
+            updateCountdownUI();
 
-            // 2. Players list
-            playersListEl.innerHTML = '';
-            (data.players || []).forEach(name => {
-                const li = document.createElement('li');
-                li.textContent = name;
-                playersListEl.appendChild(li);
-            });
-
-            // 3. Heartbeat status
-            heartbeatStatusEl.innerHTML = '';
-            if (data.heartbeat_status) {
-                Object.entries(data.heartbeat_status).forEach(([name, status]) => {
-                    const li = document.createElement('li');
-                    li.textContent = `${name}: ${status}`;
-                    li.style.color = status.includes('Lost') ? 'red' : 'lime';
-                    heartbeatStatusEl.appendChild(li);
-                });
-            }
-
-            // 4. Logs (append thay vì ghi đè)
+            logsEl.innerHTML = '';
             (data.token_ring_logs || []).forEach(log => {
                 const p = document.createElement('p');
                 p.textContent = log;
                 logsEl.appendChild(p);
             });
-
-            // Tự động cuộn xuống dưới
             logsEl.scrollTop = logsEl.scrollHeight;
         };
-
 
         function updateCountdownUI() {
             if (countdownInterval) clearInterval(countdownInterval);
@@ -111,6 +81,32 @@
         };
         const heartbeatStatusEl = document.getElementById('heartbeatStatus');
 
+        evtSource.onmessage = e => {
+            const data = JSON.parse(e.data);
+
+            currentTurnEl.textContent = data.current_turn || '-';
+            playersListEl.textContent = (data.players || []).join(', ') || '-';
+
+            // Hiển thị logs
+            logsEl.innerHTML = '';
+            (data.token_ring_logs || []).forEach(log => {
+                const p = document.createElement('p');
+                p.textContent = log;
+                logsEl.appendChild(p);
+            });
+
+            // Hiển thị trạng thái heartbeat
+            heartbeatStatusEl.innerHTML = '';
+            if (data.heartbeat_status) {
+                Object.entries(data.heartbeat_status).forEach(([name, status]) => {
+                    const li = document.createElement('li');
+                    li.textContent = `${name}: ${status}`;
+                    heartbeatStatusEl.appendChild(li);
+                });
+            }
+
+            logsEl.scrollTop = logsEl.scrollHeight;
+        };
 
     </script>
 </body>
